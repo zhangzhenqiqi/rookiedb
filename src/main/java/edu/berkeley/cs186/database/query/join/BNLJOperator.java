@@ -10,10 +10,15 @@ import java.util.Iterator;
 import java.util.NoSuchElementException;
 
 /**
+ * 使用Block(Chunk) Nested Loop Join (块嵌套循环连接)算法在 leftColumnName 和 rightColumnName 两个关系上连接。
+ * 左表使用块枚举，右表使用页枚举
+ *
+ * <br>
  * Performs an equijoin between two relations on leftColumnName and
  * rightColumnName respectively using the Block Nested Loop Join algorithm.
  */
 public class BNLJOperator extends JoinOperator {
+    /**buffer 数目，1 buffer用作 输出缓存，1 buffer 用作 right relation 的输入缓存，剩余下的 n-2 buffer用作 left table 的chunk缓存*/
     protected int numBuffers;
 
     public BNLJOperator(QueryOperator leftSource,
@@ -40,7 +45,7 @@ public class BNLJOperator extends JoinOperator {
         int numLeftPages = getLeftSource().estimateStats().getNumPages();
         int numRightPages = getRightSource().estimateIOCost();
         return ((int) Math.ceil((double) numLeftPages / (double) usableBuffers)) * numRightPages +
-               getLeftSource().estimateIOCost();
+                getLeftSource().estimateIOCost();
     }
 
     /**
@@ -48,7 +53,7 @@ public class BNLJOperator extends JoinOperator {
      * Look over the implementation in SNLJOperator if you want to get a feel
      * for the fetchNextRecord() logic.
      */
-    private class BNLJIterator implements Iterator<Record>{
+    private class BNLJIterator implements Iterator<Record> {
         // Iterator over all the records of the left source
         private Iterator<Record> leftSourceIterator;
         // Iterator over all the records of the right source
@@ -66,6 +71,9 @@ public class BNLJOperator extends JoinOperator {
             super();
             this.leftSourceIterator = getLeftSource().iterator();
             this.fetchNextLeftBlock();
+            if (leftBlockIterator.hasNext()) {
+                leftRecord = leftBlockIterator.next();
+            }
 
             this.rightSourceIterator = getRightSource().backtrackingIterator();
             this.rightSourceIterator.markNext();
@@ -88,9 +96,13 @@ public class BNLJOperator extends JoinOperator {
          */
         private void fetchNextLeftBlock() {
             // TODO(proj3_part1): implement
+            leftBlockIterator = getBlockIterator(leftSourceIterator, getLeftSource().getSchema(), numBuffers - 2);
+            leftBlockIterator.markNext();
         }
 
         /**
+         * fetch 右关系的一页记录
+         * <br>
          * Fetch the next page of records from the right source.
          * rightPageIterator should be set to a backtracking iterator over up to
          * one page of records from the right source.
@@ -103,6 +115,8 @@ public class BNLJOperator extends JoinOperator {
          */
         private void fetchNextRightPage() {
             // TODO(proj3_part1): implement
+            rightPageIterator = getBlockIterator(rightSourceIterator, getRightSource().getSchema(), 1);
+            rightPageIterator.markNext();
         }
 
         /**
@@ -115,10 +129,75 @@ public class BNLJOperator extends JoinOperator {
          */
         private Record fetchNextRecord() {
             // TODO(proj3_part1): implement
-            return null;
+            //构造方法中已经执行了，fetch，之后leftRecord一直不会为null，直至遍历完所有的左表
+            if (leftRecord == null) {
+                return null;
+            }
+            while (true) {
+                if (rightPageIterator.hasNext()) {//当前right page 还有记录
+                    Record rightRecord = rightPageIterator.next();
+                    if (compare(leftRecord, rightRecord) == 0) {
+                        return leftRecord.concat(rightRecord);
+                    } else {
+                        continue;
+                    }
+                } else if (leftBlockIterator.hasNext()) {
+                    //right page没记录了，但是left block还有，此时移动left指针，同时reset right page
+                    leftRecord = leftBlockIterator.next();
+                    rightPageIterator.reset();
+                    continue;
+                }
+
+
+                //此时，当前left block 和当前right page 已双重循环完毕
+                leftRecord = null;
+                if (rightSourceIterator.hasNext()) {//right rel 还有page
+                    fetchNextRightPage();
+                    leftBlockIterator.reset();
+                    leftRecord = leftBlockIterator.next();
+                } else if (leftSourceIterator.hasNext()) {//right rel 没page了，但是left rel还有block
+                    fetchNextLeftBlock();
+                    leftRecord = leftBlockIterator.next();
+                    rightSourceIterator.reset();
+                    fetchNextRightPage();
+                } else {
+                    return null;
+                }
+
+            }
+            /*while (leftRecord != null) {
+                if (rightPageIterator.hasNext()) {//右表页仍有元素
+                    Record rightRecord = rightPageIterator.next();
+                    if (compare(leftRecord, rightRecord) == 0) {
+                        return leftRecord.concat(rightRecord);
+                    }
+                } else {
+                    fetchNextRightPage();  //尝试获取右表下一页
+                    if (!rightPageIterator.hasNext()) {//说明右表已完成一轮遍历
+                        rightSourceIterator.reset();
+                        leftRecord = null;
+                        fetchNextRightPage();
+                        if (!rightPageIterator.hasNext()) {
+                            return null;
+                        }
+                    }
+                }
+                //此时 rightPageIt 一定有元素
+                if (leftRecord == null) {
+                    if (!leftBlockIterator.hasNext()) {
+                        fetchNextLeftBlock();
+                    }
+                    if (leftBlockIterator.hasNext()) {
+                        leftRecord = leftBlockIterator.next();
+                    }
+                }
+            }*/
         }
 
         /**
+         * 这里用了一个小技巧，判断hashNext时，如果存在下一个元素则直接缓存到 nextRecord 中，供
+         * next()消费。
+         * <br>
          * @return true if this iterator has another record to yield, otherwise
          * false
          */
@@ -137,6 +216,7 @@ public class BNLJOperator extends JoinOperator {
             if (!this.hasNext()) throw new NoSuchElementException();
             Record nextRecord = this.nextRecord;
             this.nextRecord = null;
+//            System.out.println(nextRecord);
             return nextRecord;
         }
     }

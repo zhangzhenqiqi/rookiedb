@@ -9,6 +9,9 @@ import edu.berkeley.cs186.database.table.stats.TableStats;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 
+/**
+ * 横向选择运算符，根据条件predictOperator(>,<,=,>=,<=)，对key进行比较，将符合条件的记录向上传递
+ */
 public class SelectOperator extends QueryOperator {
     private int columnIndex;
     private String columnName;

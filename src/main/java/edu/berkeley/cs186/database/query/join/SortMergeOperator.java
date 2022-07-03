@@ -13,6 +13,9 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
 
+/**
+ * 使用 排序-合并 算法连接两个表，适合自然连接、等值连接。
+ */
 public class SortMergeOperator extends JoinOperator {
     public SortMergeOperator(QueryOperator leftSource,
                              QueryOperator rightSource,
@@ -20,8 +23,8 @@ public class SortMergeOperator extends JoinOperator {
                              String rightColumnName,
                              TransactionContext transaction) {
         super(prepareLeft(transaction, leftSource, leftColumnName),
-              prepareRight(transaction, rightSource, rightColumnName),
-              leftColumnName, rightColumnName, transaction, JoinType.SORTMERGE);
+                prepareRight(transaction, rightSource, rightColumnName),
+                leftColumnName, rightColumnName, transaction, JoinType.SORTMERGE);
         this.stats = this.estimateStats();
     }
 
@@ -87,10 +90,10 @@ public class SortMergeOperator extends JoinOperator {
      */
     private class SortMergeIterator implements Iterator<Record> {
         /**
-        * Some member variables are provided for guidance, but there are many possible solutions.
-        * You should implement the solution that's best for you, using any member variables you need.
-        * You're free to use these member variables, but you're not obligated to.
-        */
+         * Some member variables are provided for guidance, but there are many possible solutions.
+         * You should implement the solution that's best for you, using any member variables you need.
+         * You're free to use these member variables, but you're not obligated to.
+         */
         private Iterator<Record> leftIterator;
         private BacktrackingIterator<Record> rightIterator;
         private Record leftRecord;
@@ -134,12 +137,46 @@ public class SortMergeOperator extends JoinOperator {
             return nextRecord;
         }
 
+
+        /**
+         * 将right 的指针复位，并移动left 的指针到下一个。
+         */
+        private void endRound() {
+            leftRecord = leftIterator.hasNext() ? leftIterator.next() : null;
+            rightIterator.reset();
+            rightRecord = rightIterator.next();
+            marked = false;
+        }
+
         /**
          * Returns the next record that should be yielded from this join,
          * or null if there are no more records to join.
          */
         private Record fetchNextRecord() {
             // TODO(proj3_part1): implement
+            while (leftRecord != null && rightRecord != null) {
+                if (!marked) {
+                    while (compare(leftRecord, rightRecord) < 0) {
+                        if (leftIterator.hasNext()) leftRecord = leftIterator.next();
+                        else return leftRecord = null;
+                    }
+                    while (compare(leftRecord, rightRecord) > 0) {
+                        if (rightIterator.hasNext()) rightRecord = rightIterator.next();
+                        else return rightRecord = null;
+                    }
+                    rightIterator.markPrev();
+                    marked = true;
+                }
+
+                if (compare(leftRecord, rightRecord) == 0) {
+                    Record ret = leftRecord.concat(rightRecord);
+                    rightRecord = rightIterator.hasNext() ? rightIterator.next() : null;
+                    if (rightRecord == null) endRound();
+                    return ret;
+                } else {
+                    endRound();
+                }
+            }
             return null;
         }
 

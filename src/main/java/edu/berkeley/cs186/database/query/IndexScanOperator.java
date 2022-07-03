@@ -12,6 +12,9 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
 
+/**
+ * 索引扫描迭代器，接受一个表名、字段名、一个predictOprator(>,<,>=,<=,=)和一个值
+ */
 class IndexScanOperator extends QueryOperator {
     private TransactionContext transaction;
     private String tableName;

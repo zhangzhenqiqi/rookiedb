@@ -10,6 +10,12 @@ import static org.junit.Assert.*;
 
 @Category({Proj99Tests.class, SystemTests.class})
 public class TestIntDataBox {
+
+    public static void main(String[] args) {
+        DataBox dataBox = new IntDataBox(42);
+        System.out.println(dataBox.type());
+    }
+
     @Test
     public void testType() {
         assertEquals(Type.intType(), new IntDataBox(0).type());

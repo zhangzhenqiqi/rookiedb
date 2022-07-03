@@ -4,33 +4,58 @@ import edu.berkeley.cs186.database.databox.Type;
 import edu.berkeley.cs186.database.databox.TypeId;
 import edu.berkeley.cs186.database.table.Record;
 
-/** Metadata about a B+ tree. */
+/** B+树的元信息
+ * <p></p>
+ * Metadata about a B+ tree.
+ * */
 public class BPlusTreeMetadata {
     // Table for which this B+ tree is for
+    /**
+     * 表名
+     */
     private final String tableName;
 
     // Column that this B+ tree uses as a search key
+    /**
+     * key对应的列名
+     */
     private final String colName;
 
     // B+ trees map keys (of some type) to record ids. This is the type of the
     // keys.
+    /**
+     * key的类型
+     */
     private final Type keySchema;
+
 
     // The order of the tree. Given a tree of order d, its inner nodes store
     // between d and 2d keys and between d+1 and 2d+1 children pointers. Leaf
     // nodes store between d and 2d (key, record id) pairs. Notable exceptions
     // include the root node and leaf nodes that have been deleted from; these
     // may contain fewer than d entries.
+    /**
+     * B+树的阶数
+     */
     private final int order;
 
     // The partition that the B+ tree allocates pages from. Every node of the B+ tree
     // is stored on a different page on this partition.
+    /**
+     * B+树所在的分区
+     */
     private final int partNum;
 
     // The page number of the root node.
+    /**
+     * 根节点所在的页号
+     */
     private long rootPageNum;
 
     // The height of this tree.
+    /**
+     * 树的高度
+     */
     private int height;
 
     public BPlusTreeMetadata(String tableName, String colName, Type keySchema, int order, int partNum,

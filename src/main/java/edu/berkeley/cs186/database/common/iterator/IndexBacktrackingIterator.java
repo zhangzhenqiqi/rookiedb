@@ -3,6 +3,8 @@ package edu.berkeley.cs186.database.common.iterator;
 import java.util.NoSuchElementException;
 
 /**
+ * 在支持索引的集合上实现回溯迭代器。
+ * <br>
  * Partial implementation of a backtracking iterator over a collection that supports
  * indexing, with some indices possibly being "empty" and not matching to a value.
  * Subclasses only need to implement getNextNonEmpty(int) and getValue(int), the

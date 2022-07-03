@@ -9,6 +9,10 @@ import edu.berkeley.cs186.database.table.Schema;
 import java.util.List;
 
 /**
+ * 和Run类似，也表示一部分临时的磁盘空间，他对应的是分区操作而已。
+ * 新建的Partition对应的临时表不会是同一个的，虽然传入的都是同一个schema，因为schema并不是用作命名的，
+ * 只是为了告诉底层表的结构，每次新建的临时表名字与一个自增的整数有关，不会重复。
+ * <br>
  * A partition represents a section of space on disk that we can append records
  * to or read from. This is useful for external hashing to store records we
  * aren't using and free up memory. Automatically buffers reads and writes to

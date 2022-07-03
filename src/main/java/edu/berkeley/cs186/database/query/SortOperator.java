@@ -9,7 +9,15 @@ import edu.berkeley.cs186.database.table.Schema;
 import edu.berkeley.cs186.database.table.stats.TableStats;
 
 import java.util.*;
+import java.util.stream.Stream;
 
+/**
+ * 外部排序：
+ *  pass 0. 设numBuffers = B，将大文件分为 ceil(N/B)=N0 个part，对于每个part执行内部排序并暂存到磁盘。
+ *  pass 1. 此时有N0个已排序好的part，将buffers分为两部分，一部分大小为B-1用作输入，一个用作输出；每次输入B-1个 part，
+ *          然后对这B-1个part进行合并，合并为一个排序好的新part；重复此操作直至产生 ceil(N0/(B-1)) 个part。
+ *  pass 2~. 如果part个数不为1，那就重复pass1中的操作，直至成为一个part，表示归并结束。
+ */
 public class SortOperator extends QueryOperator {
     protected Comparator<Record> comparator;
     private TransactionContext transaction;
@@ -48,7 +56,7 @@ public class SortOperator extends QueryOperator {
     @Override
     public int estimateIOCost() {
         int N = getSource().estimateStats().getNumPages();
-        double pass0Runs = Math.ceil(N / (double)numBuffers);
+        double pass0Runs = Math.ceil(N / (double) numBuffers);
         double numPasses = 1 + Math.ceil(Math.log(pass0Runs) / Math.log(numBuffers - 1));
         return (int) (2 * N * numPasses) + getSource().estimateIOCost();
     }
@@ -64,7 +72,9 @@ public class SortOperator extends QueryOperator {
     }
 
     @Override
-    public boolean materialized() { return true; }
+    public boolean materialized() {
+        return true;
+    }
 
     @Override
     public BacktrackingIterator<Record> backtrackingIterator() {
@@ -78,6 +88,8 @@ public class SortOperator extends QueryOperator {
     }
 
     /**
+     * 使用内部排序，对一个runs排序。
+     * <br>
      * Returns a Run containing records from the input iterator in sorted order.
      * You're free to use an in memory sort over all the records using one of
      * Java's built-in sorting methods.
@@ -87,10 +99,17 @@ public class SortOperator extends QueryOperator {
      */
     public Run sortRun(Iterator<Record> records) {
         // TODO(proj3_part1): implement
-        return null;
+        List<Record> recordList = new ArrayList<>();
+        while (records.hasNext()) {
+            recordList.add(records.next());
+        }
+        recordList.sort(this.comparator);
+        return makeRun(recordList);
     }
 
     /**
+     * 将多个已排序的runs合并为一个已排序的runs。
+     * <br>
      * Given a list of sorted runs, returns a new run that is the result of
      * merging the input runs. You should use a Priority Queue (java.util.PriorityQueue)
      * to determine which record should be should be added to the output run
@@ -108,7 +127,29 @@ public class SortOperator extends QueryOperator {
     public Run mergeSortedRuns(List<Run> runs) {
         assert (runs.size() <= this.numBuffers - 1);
         // TODO(proj3_part1): implement
-        return null;
+        int rs = runs.size();
+        Iterator<Record>[] its = new Iterator[rs];
+        for (int i = 0; i < rs; i++) {
+            its[i] = runs.get(i).iterator();
+        }
+        Run ret = makeRun();
+        PriorityQueue<Pair<Record, Integer>> q = new PriorityQueue<>((pair1, pair2) -> {
+            return pair1.getFirst().getValue(sortColumnIndex)
+                    .compareTo(pair2.getFirst().getValue(sortColumnIndex));
+        });
+        for (int i = 0; i < rs; i++) {
+            if (its[i].hasNext()) {
+                q.add(new Pair<>(its[i].next(), i));
+            }
+        }
+        while (!q.isEmpty()) {
+            ret.add(q.peek().getFirst());
+            Integer index = q.poll().getSecond();
+            if (its[index].hasNext()) {
+                q.add(new Pair<>(its[index].next(), index));
+            }
+        }
+        return ret;
     }
 
     /**
@@ -124,6 +165,8 @@ public class SortOperator extends QueryOperator {
     }
 
     /**
+     * pass1,2,...
+     * <br>
      * Given a list of N sorted runs, returns a list of sorted runs that is the
      * result of merging (numBuffers - 1) of the input runs at a time. If N is
      * not a perfect multiple of (numBuffers - 1) the last sorted run should be
@@ -133,7 +176,14 @@ public class SortOperator extends QueryOperator {
      */
     public List<Run> mergePass(List<Run> runs) {
         // TODO(proj3_part1): implement
-        return Collections.emptyList();
+        List<Run> ret = new ArrayList<>();
+        int availBuffers = numBuffers - 1;
+        for (int i = 0, j = 0; j < runs.size(); i = j) {//每次选出B-1个sorted runs进行归并
+            j = i + availBuffers;//[i,j)
+            if (j > runs.size()) j = runs.size();
+            ret.add(mergeSortedRuns(runs.subList(i, j)));
+        }
+        return ret;
     }
 
     /**
@@ -147,9 +197,20 @@ public class SortOperator extends QueryOperator {
     public Run sort() {
         // Iterator over the records of the relation we want to sort
         Iterator<Record> sourceIterator = getSource().iterator();
-
+        if (!sourceIterator.hasNext()) return makeRun();
         // TODO(proj3_part1): implement
-        return makeRun(); // TODO(proj3_part1): replace this!
+        //pass 0
+        int availBuffers = numBuffers;
+        List<Run> runs = new ArrayList<>();
+        while (sourceIterator.hasNext()) {
+            Iterator<Record> partIterator = getBlockIterator(sourceIterator, getSchema(), availBuffers);
+            runs.add(sortRun(partIterator));
+        }
+        // pass 1,2 ...
+        while (runs.size() > 1) {
+            runs = mergePass(runs);
+        }
+        return runs.get(0);
     }
 
     /**

@@ -2,6 +2,7 @@ package edu.berkeley.cs186.database.memory;
 
 /**
  * Buffer frame.
+ * 表示单个缓冲区的帧
  */
 abstract class BufferFrame {
     Object tag = null;

@@ -11,9 +11,12 @@ import java.util.List;
 import java.util.Objects;
 
 /**
+ *  schema表示table的模式，包含了所有的列名以及其类型。
+ *
  * The schema of a table includes the name and type of every one of its
  * fields. For example, the following schema:
  *
+ * 建造者模式，链式调用
  *   Schema s = new Schema()
  *      .add("x", Type.intType())
  *      .add("y", Type.floatType());
@@ -23,7 +26,7 @@ import java.util.Objects;
 public class Schema {
     private List<String> fieldNames;
     private List<Type> fieldTypes;
-    private short sizeInBytes;
+    private short sizeInBytes; //一条记录的size
 
     /**
      * Constructs an empty Schema.

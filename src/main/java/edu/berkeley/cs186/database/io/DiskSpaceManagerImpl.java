@@ -12,6 +12,33 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
+ * 磁盘空间管理器的实现，具有虚拟页转换功能用于将Page映射到os级的文件中，为每个Page分配一个虚拟页号，并将这些Page加载、写入磁盘。<br>
+ *                                             [master page]    <br>
+ *                    /                              |                               \  <br>
+ *             [header page]                                                    [header page]   <br>
+ *       /    |     |     |     \                   ...                   /    |     |     |     \  <br>
+ *   [data] [data] ... [data] [data]                                   [data] [data] ... [data] [data]      <br>
+ * 其中page size 为4KB。<br></br>
+ * data表示一个数据页。<br></br>
+ * header page中保存着一个bitmap，用于指示某个Page是否被分配了，一个header page管理着32K个数据页（4KB=32K bit）。
+ * master page用于管理header page，每个header page索引占据16bit，所以一个master page管理着4K*8/16=2K个header page。
+ * 一个master page表示一个分区，一个分区最大可以有64M的数据页，大小为64M*4KB=256GB<br></br>
+ *
+ * master page以及header page永久缓存在内存中，相当于是索引，对其造成的更改会立即刷新到磁盘。此缓存与BufferManager分开完成。<br></br>
+ *
+ * 虚拟页号用一个64位整数表示，格式为：<br></br>
+ *      partition number * 10^10 + n<br></br>
+ * 其中n为分区的第n个数据页（从0开始索引）。<br></br>
+ *
+ *  每个分区对应一个os级别的文件。在这个文件中，存储方式如下：<br></br>
+ *  - master page 是os文件的第0页<br></br>
+ *  - 第一个 header page 是os文件的第1页<br></br>
+ *  - 接下来的32K页是第一个 header page 管理的页。<br></br>
+ *  - 第二个 header page.. <br></br>
+ *  - ...   <br></br>
+ *
+ * &nbsp;注意，这里的这颗树可不是B+树，这只是磁盘管理器所用的管理方式，千万别把二者混淆。
+ *
  * An implementation of a disk space manager with virtual page translation, and
  * two levels of header pages, allowing for (with page size of 4K) 256G worth of data per partition:
  *

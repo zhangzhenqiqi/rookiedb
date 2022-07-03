@@ -9,7 +9,9 @@ import edu.berkeley.cs186.database.table.Record;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 
+
 /**
+ *使用 简单嵌套循环 实现 等值连接
  * Performs an equijoin between two relations on leftColumnName and
  * rightColumnName respectively using the Simple Nested Loop Join algorithm.
  */
@@ -29,6 +31,7 @@ public class SNLJOperator extends JoinOperator {
         return new SNLJIterator();
     }
 
+    // ( 左表记录数目 * 枚举一次右表的IO ) + 枚举一次左表的IO
     @Override
     public int estimateIOCost() {
         int numLeftRecords = getLeftSource().estimateStats().getNumRecords();
@@ -36,7 +39,8 @@ public class SNLJOperator extends JoinOperator {
         return numLeftRecords * numRightPages + getLeftSource().estimateIOCost();
     }
 
-    /**
+    /**左表作为外循环，右表作为内循环。
+     * <br>
      * A record iterator that executes the logic for a simple nested loop join.
      * Note that the left table is the "outer" loop and the right table is the
      * "inner" loop.
@@ -61,6 +65,8 @@ public class SNLJOperator extends JoinOperator {
         }
 
         /**
+         * 返回下一条在当前连接下匹配到的记录，或者 null 表示不再有记录满足条件。
+         * <br>
          * Returns the next record that should be yielded from this join,
          * or null if there are no more records to join.
          */

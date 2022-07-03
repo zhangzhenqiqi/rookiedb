@@ -8,6 +8,9 @@ import edu.berkeley.cs186.database.table.stats.TableStats;
 
 import java.util.Iterator;
 
+/**
+ * 此操作符 给表的所有记录提供一个迭代器
+ */
 public class SequentialScanOperator extends QueryOperator {
     private TransactionContext transaction;
     private String tableName;

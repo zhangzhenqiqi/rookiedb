@@ -6,6 +6,7 @@ import java.nio.ByteBuffer;
 import java.util.Objects;
 
 /**
+ * 记录的指针，<页号，页内偏移（第几个条目）>  <br>
  * A Record in a particular table is uniquely identified by its page number
  * (the number of the page on which it resides) and its entry number (the
  * record's index in the page). A RecordId is a pair of the page number and

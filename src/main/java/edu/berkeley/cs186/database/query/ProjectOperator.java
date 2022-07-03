@@ -8,6 +8,9 @@ import edu.berkeley.cs186.database.table.stats.TableStats;
 
 import java.util.*;
 
+/**
+ * 投影运算符（纵向选择）,只选择感兴趣的列向上传递。
+ */
 public class ProjectOperator extends QueryOperator {
     // A list of column names to use in the output of this operator
     private List<String> outputColumns;

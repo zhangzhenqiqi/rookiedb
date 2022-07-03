@@ -2,6 +2,9 @@ package edu.berkeley.cs186.database.io;
 
 public interface DiskSpaceManager extends AutoCloseable {
     short PAGE_SIZE = 4096; // size of a page in bytes
+    /**
+     * 无效的页号
+     * */
     long INVALID_PAGE_NUM = -1L; // a page number that is always invalid
 
     @Override
@@ -52,7 +55,7 @@ public interface DiskSpaceManager extends AutoCloseable {
     /**
      * Reads a page.
      *
-     * @param page number of page to be read
+     * @param page 待读取的页对应的虚拟页号
      * @param buf byte buffer whose contents will be filled with page data
      */
     void readPage(long page, byte[] buf);

@@ -20,6 +20,8 @@ import org.junit.rules.TemporaryFolder;
 
 import java.io.File;
 import java.util.Iterator;
+import java.util.Scanner;
+import java.util.concurrent.ThreadLocalRandom;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -37,6 +39,7 @@ public class TestDatabase {
     public void beforeEach() throws Exception {
         File testDir = tempFolder.newFolder(TestDir);
         this.filename = testDir.getAbsolutePath();
+        System.out.println(this.filename);
         this.db = new Database(filename, 32);
         this.db.setWorkMem(4);
         try(Transaction t = this.db.beginTransaction()) {
@@ -49,6 +52,7 @@ public class TestDatabase {
         try(Transaction t = this.db.beginTransaction()) {
             t.dropAllTables();
         }
+//        new Scanner(System.in).nextInt();
         this.db.close();
     }
 

@@ -14,6 +14,8 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BiConsumer;
 
 /**
+ * 缓冲区管理器的实现，具有可调配的页面替换策略。
+ * 数据保存在一个page大小的字节数组之中。
  * Implementation of a buffer manager, with configurable page replacement policies.
  * Data is stored in page-sized byte arrays, and returned in a Frame object specific
  * to the page loaded (evicting and loading a new page into the frame will result in
@@ -24,9 +26,15 @@ public class BufferManager implements AutoCloseable {
     // We reserve 36 bytes on each page for bookkeeping for recovery
     // (used to store the pageLSN, and to ensure that a redo-only/undo-only log record can
     // fit on one page).
+    /**
+     * ，每页保存字节数,保留字节用于记录恢复
+     */
     public static final short RESERVED_SPACE = 36;
 
     // Effective page size available to users of buffer manager.
+    /**
+     * 可以使用的有效页面大小（Byte）
+     */
     public static final short EFFECTIVE_PAGE_SIZE = (short) (DiskSpaceManager.PAGE_SIZE - RESERVED_SPACE);
 
     // Buffer frames
@@ -36,12 +44,16 @@ public class BufferManager implements AutoCloseable {
     private DiskSpaceManager diskSpaceManager;
 
     // Map of page number to frame index
+    /**
+     * 页号 到 帧下标的映射
+     */
     private Map<Long, Integer> pageToFrame;
 
     // Lock on buffer manager
     private ReentrantLock managerLock;
 
     // Eviction policy
+    /**淘汰策略*/
     private EvictionPolicy evictionPolicy;
 
     // Index of first free frame
@@ -54,6 +66,7 @@ public class BufferManager implements AutoCloseable {
     private long numIOs = 0;
 
     /**
+     * 缓冲区帧，包含已加载页面的信息，包裹在底层字节数组。空闲帧使用一个链表链接。
      * Buffer frame, containing information about the loaded page, wrapped around the
      * underlying byte array. Free frames use the index field to create a (singly) linked
      * list between free frames.
@@ -61,12 +74,13 @@ public class BufferManager implements AutoCloseable {
     class Frame extends BufferFrame {
         private static final int INVALID_INDEX = Integer.MIN_VALUE;
 
-        byte[] contents;
-        private int index;
-        private long pageNum;
+        byte[] contents;//内容
+        private int index;//帧号
+        private long pageNum;//虚拟页号
+        /**脏位*/
         private boolean dirty;
         private ReentrantLock frameLock;
-        private boolean logPage;
+        private boolean logPage; // log 类型的page？
 
         Frame(byte[] contents, int nextFree) {
             this(contents, ~nextFree, DiskSpaceManager.INVALID_PAGE_NUM);
@@ -87,6 +101,7 @@ public class BufferManager implements AutoCloseable {
         }
 
         /**
+         * 固定此帧
          * Pin buffer frame; cannot be evicted while pinned. A "hit" happens when the
          * buffer frame gets pinned.
          */
@@ -102,6 +117,7 @@ public class BufferManager implements AutoCloseable {
         }
 
         /**
+         * 取消固定
          * Unpin buffer frame.
          */
         @Override
@@ -111,6 +127,7 @@ public class BufferManager implements AutoCloseable {
         }
 
         /**
+         * 是否有效，index从0分界
          * @return whether this frame is valid
          */
         @Override
@@ -119,6 +136,7 @@ public class BufferManager implements AutoCloseable {
         }
 
         /**
+         * 此帧的页面是否被释放
          * @return whether this frame's page has been freed
          */
         private boolean isFreed() {
@@ -577,6 +595,7 @@ public class BufferManager implements AutoCloseable {
     }
 
     /**
+     * 淘汰所有帧
      * Calls evict on every frame in sequence.
      */
     public void evictAll() {

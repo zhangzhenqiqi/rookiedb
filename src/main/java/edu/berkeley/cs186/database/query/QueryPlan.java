@@ -12,6 +12,9 @@ import edu.berkeley.cs186.database.table.Schema;
 import java.util.*;
 
 /**
+ * 查询计划是查询运算符的组合，它提供了查询的执行方式。
+ * 如果嵌套select，如何执行呢？？
+ * 默认使用别名即可。你一旦起了别名就只能用这个别名！不可以同时有多个table_name,在MySQL中也是这样的。
  * QueryPlan provides a set of functions to generate simple queries. Calling the
  * methods corresponding to SQL syntax stores the information in the QueryPlan,
  * and calling execute generates and executes a QueryPlan DAG.
@@ -30,8 +33,10 @@ public class QueryPlan {
     // A list of objects representing joins (INNER JOIN clauses)
     private List<JoinPredicate> joinPredicates;
     // A map from aliases to tableNames (tableName AS alias)
+    // 此map包含了所有表的别名，没有别名的话默认的别名就是原始表名
     private Map<String, String> aliases;
     // Aliases for temporary tables from WITH clause
+    // With子句中的临时表表名
     private Map<String, String> cteAliases;
     // A list of objects representing selection predicates (WHERE clause)
     private List<SelectPredicate> selectPredicates;
@@ -104,20 +109,20 @@ public class QueryPlan {
      */
     private String resolveColumn(String column) {
         String result = null;
-        for (String tableName: this.tableNames) {
+        for (String tableName : this.tableNames) {
             Schema s = transaction.getSchema(tableName);
-            for (String fieldName: s.getFieldNames()) {
+            for (String fieldName : s.getFieldNames()) {
                 if (fieldName.equals(column)) {
                     if (result != null) throw new RuntimeException(
                             "Ambiguous column name `" + column + " found in both `" +
-                            result + "` and `" + tableName + "`.");
+                                    result + "` and `" + tableName + "`.");
                     result = tableName;
                 }
             }
         }
         if (result == null)
             throw new IllegalArgumentException("Unknown column `" + column + "`");
-        return  result;
+        return result;
     }
 
     @Override
@@ -138,13 +143,13 @@ public class QueryPlan {
             result.append(String.format("\nFROM %s\n", baseTable));
         else result.append(String.format("\nFROM %s AS %s\n", baseTable, alias));
         // INNER JOIN clauses
-        for (JoinPredicate predicate: this.joinPredicates)
+        for (JoinPredicate predicate : this.joinPredicates)
             result.append(String.format("    %s\n", predicate));
         // WHERE clause
         if (selectPredicates.size() > 0) {
             result.append("WHERE\n");
             List<String> predicates = new ArrayList<>();
-            for (SelectPredicate predicate: this.selectPredicates) {
+            for (SelectPredicate predicate : this.selectPredicates) {
                 predicates.add(predicate.toString());
             }
             result.append("   ").append(String.join(" AND\n   ", predicates));
@@ -169,16 +174,25 @@ public class QueryPlan {
      *   table3.col > 6
      */
     private class SelectPredicate {
+        //指定需要断言的表和字段
         String tableName;
         String column;
+        //断言
         PredicateOperator operator;
+        //进行比较的值
         DataBox value;
 
+        /**
+         *
+         * @param column-具有两种形式，1）tableName.columnName，即包含了表名; 2) 不包含表名，需要根据列名寻找包含此列的表，不是很安全。
+         * @param operator
+         * @param value
+         */
         SelectPredicate(String column, PredicateOperator operator, DataBox value) {
             if (column.contains(".")) {
                 this.tableName = column.split("\\.")[0];
                 column = column.split("\\.")[1];
-            }  else this.tableName = resolveColumn(column);
+            } else this.tableName = resolveColumn(column);
             this.column = column;
             this.operator = operator;
             this.value = value;
@@ -197,6 +211,7 @@ public class QueryPlan {
      */
     private class JoinPredicate {
         String leftTable;
+        /** 左表的全限定连接字段名，即包含了表名*/
         String leftColumn;
         String rightTable;
         String rightColumn;
@@ -216,9 +231,9 @@ public class QueryPlan {
             this.rightColumn = rightColumn;
             if (!tableName.equals(rightTable) && !tableName.equals(leftTable)) {
                 throw new IllegalArgumentException(String.format(
-                    "`%s` is invalid. ON clause of INNER JOIN must contain the " +
-                            "new table being joined.",
-                    this.toString()
+                        "`%s` is invalid. ON clause of INNER JOIN must contain the " +
+                                "new table being joined.",
+                        this.toString()
                 ));
             }
         }
@@ -228,10 +243,10 @@ public class QueryPlan {
             String unAliased = aliases.get(joinTable);
             if (unAliased.equals(joinTable)) {
                 return String.format("INNER JOIN %s ON %s = %s",
-                    this.joinTable, this.leftColumn, this.rightColumn);
+                        this.joinTable, this.leftColumn, this.rightColumn);
             }
             return String.format("INNER JOIN %s AS %s ON %s = %s",
-                unAliased, this.joinTable, this.leftColumn, this.rightColumn);
+                    unAliased, this.joinTable, this.leftColumn, this.rightColumn);
         }
     }
 
@@ -244,11 +259,13 @@ public class QueryPlan {
      * @throws RuntimeException a set of projections have already been
      * specified.
      */
-    public void project(String...columnNames) {
+    public void project(String... columnNames) {
         project(Arrays.asList(columnNames));
     }
 
     /**
+     * 添加一个投影操作符
+     * <br>
      * Add a project operator to the QueryPlan with a list of column names. Can
      * only specify one set of projections.
      *
@@ -300,6 +317,7 @@ public class QueryPlan {
     }
 
     // Sort ////////////////////////////////////////////////////////////////////
+
     /**
      * Add a sort operator to the query plan on the given column.
      */
@@ -360,6 +378,8 @@ public class QueryPlan {
     // Select //////////////////////////////////////////////////////////////////
 
     /**
+     * 添加一个选择操作符，对应的列要满足谓词operator-value
+     * <br>
      * Add a select operator. Only returns columns in which the column fulfills
      * the predicate relative to value.
      *
@@ -397,7 +417,7 @@ public class QueryPlan {
      *
      * @param columns the columns to group by
      */
-    public void groupBy(String...columns) {
+    public void groupBy(String... columns) {
         this.groupByColumns = Arrays.asList(columns);
     }
 
@@ -430,12 +450,14 @@ public class QueryPlan {
     // Join ////////////////////////////////////////////////////////////////////
 
     /**
+     * Join操作会引入另一张table，用tableName表示新加入的表
+     * <br>
      * Join the leftColumnName column of the existing query plan against the
      * rightColumnName column of tableName.
      *
      * @param tableName the table to join against
-     * @param leftColumnName the join column in the existing QueryPlan
-     * @param rightColumnName the join column in tableName
+     * @param leftColumnName the join column in the existing QueryPlan - 当前QueryPlan中的连接列
+     * @param rightColumnName the join column in tableName - tableName中的连接列
      */
     public void join(String tableName, String leftColumnName, String rightColumnName) {
         join(tableName, tableName, leftColumnName, rightColumnName);
@@ -447,7 +469,7 @@ public class QueryPlan {
      *
      * @param tableName the table to join against
      * @param aliasTableName alias of table to join against
-     * @param leftColumnName the join column in the existing QueryPlan
+     * @param leftColumnName the join column in the existing QueryPlan,include tableName and columnName
      * @param rightColumnName the join column in tableName
      */
     public void join(String tableName, String aliasTableName, String leftColumnName,
@@ -496,7 +518,7 @@ public class QueryPlan {
             throw new UnsupportedOperationException("Duplicate alias " + alias);
         }
         cteAliases.put(alias, tableName);
-        for (String k: aliases.keySet()) {
+        for (String k : aliases.keySet()) {
             if (aliases.get(k).toLowerCase().equals(alias.toLowerCase())) {
                 aliases.put(k, tableName);
             }
@@ -507,6 +529,8 @@ public class QueryPlan {
     // Task 5: Single Table Access Selection ///////////////////////////////////
 
     /**
+     * 获取与此表相关的，且谓词运算符可用于索引扫描的所有选择谓词。
+     * <br>
      * Gets all select predicates for which there exists an index on the column
      * referenced in that predicate for the given table and where the predicate
      * operator can be used in an index scan.
@@ -528,6 +552,11 @@ public class QueryPlan {
     }
 
     /**
+     * 将所有符合条件的选择谓词下放到source,但除去索引处的谓词，因为这个谓词已经应用到索引扫描了，没必要再次应用。
+     * 这并不难理解，IndexOperator也是一个迭代器，但他显然并不是全局扫描，他的特点就是索引，所以肯定是涉及到索引处的选择才会使用IndexOperator，
+     * 如果不涉及索引，那根本不需要使用它。所以要传递给IndexOperator一个SelectPredicate供它查找索引以及迭代数据，换句话说传递过去这个谓词已经应用
+     * 到数据上了。所以这里在下放select时，对于索引操作符就可以舍去他对应的那个select谓词，这就是except参数的作用。
+     * <br>
      * Applies all eligible select predicates to a given source, except for the
      * predicate at index except. The purpose of except is because there might
      * be one select predicate that was already used for an index scan, so
@@ -574,15 +603,31 @@ public class QueryPlan {
      * minimum cost operator can be broken arbitrarily.
      */
     public QueryOperator minCostSingleAccess(String table) {
+//        table = aliases.get(table);
         QueryOperator minOp = new SequentialScanOperator(this.transaction, table);
-
         // TODO(proj3_part2): implement
+        int minCost = minOp.estimateIOCost();
+        int except = -1;
+        for (int i : getEligibleIndexColumns(table)) {
+            SelectPredicate selectPredicate = selectPredicates.get(i);
+            QueryOperator tmpOp = new IndexScanOperator(this.transaction, table, selectPredicate.column,
+                    selectPredicate.operator, selectPredicate.value);
+            int tmpCost = tmpOp.estimateIOCost();
+            if (tmpCost < minCost) {
+                minCost = tmpCost;
+                minOp = tmpOp;
+                except = i;
+            }
+        }
+        minOp = addEligibleSelections(minOp, except);
         return minOp;
     }
 
     // Task 6: Join Selection //////////////////////////////////////////////////
 
     /**
+     * 给定两个QueryOperator，找出最优的连接方式，这里只考虑了SNLJ和BNLJ。
+     * <br>
      * Given a join predicate between left and right operators, finds the lowest
      * cost join operator out of join types in JoinOperator.JoinType. By default
      * only considers SNLJ and BNLJ to prevent dependencies on GHJ, Sort and SMJ.
@@ -612,6 +657,10 @@ public class QueryPlan {
     }
 
     /**
+     * 这里之所以没有枚举所有的table，而是枚举join predicate，原因在于在课程中说明了，我们的优化计划中不包含叉积，
+     * 而不是join predicate中的任意两表之间连接，那就是叉积，因为没有这俩表的连接条件。例如 A join B join C，
+     * (A,B),(B,C)之间均有连接条件，但对于AC是没有的，要考虑所有结果，即叉积。
+     * <br>
      * Iterate through all table sets in the previous pass of the search. For
      * each table set, check each join predicate to see if there is a valid join
      * with a new table. If so, find the minimum cost join. Return a map from
@@ -646,12 +695,51 @@ public class QueryPlan {
         //      calculate the cheapest join with the new table (the one you
         //      fetched an operator for from pass1Map) and the previously joined
         //      tables. Then, update the result map if needed.
+
+        for (Map.Entry<Set<String>, QueryOperator> prevElement : prevMap.entrySet()) {
+            Set<String> prevSet = prevElement.getKey();
+            QueryOperator prevOp = prevElement.getValue();
+            for (JoinPredicate joinPredicate : this.joinPredicates) {
+                String leftTable = joinPredicate.leftTable;
+                String rightTable = joinPredicate.rightTable;
+                if (!(prevSet.contains(leftTable) ^ prevSet.contains(rightTable))) {
+                    continue;
+                }
+                Set<String> nextSet;
+                QueryOperator newOp;
+                if (prevSet.contains(leftTable)) {
+                    nextSet = new HashSet<>(prevSet);
+                    nextSet.add(rightTable);
+                    newOp = pass1Map.get(new HashSet<String>() {{
+                        add(rightTable);
+                    }});
+                    QueryOperator nextOp = minCostJoinType(prevOp, newOp, joinPredicate.leftColumn, joinPredicate.rightColumn);
+                    if (!result.containsKey(nextSet)
+                            || result.get(nextSet).estimateIOCost() > nextOp.estimateIOCost()) {
+                        result.put(nextSet, nextOp);
+                    }
+                } else {
+                    nextSet = new HashSet<>(prevSet);
+                    nextSet.add(leftTable);
+                    newOp = pass1Map.get(new HashSet<String>() {{
+                        add(leftTable);
+                    }});
+                    QueryOperator nextOp = minCostJoinType(prevOp, newOp, joinPredicate.rightColumn, joinPredicate.leftColumn);
+                    if (!result.containsKey(nextSet) || result.get(nextSet).estimateIOCost() > nextOp.estimateIOCost()) {
+                        result.put(nextSet, nextOp);
+                    }
+                }
+
+            }
+        }
         return result;
     }
 
     // Task 7: Optimal Plan Selection //////////////////////////////////////////
 
     /**
+     * 返回map中开销最小的那个QueryOperator
+     * <br>
      * Finds the lowest cost QueryOperator in the given mapping. A mapping is
      * generated on each pass of the search algorithm, and relates a set of tables
      * to the lowest cost QueryOperator accessing those tables.
@@ -695,7 +783,27 @@ public class QueryPlan {
         // Set the final operator to the lowest cost operator from the last
         // pass, add group by, project, sort and limit operators, and return an
         // iterator over the final operator.
-        return this.executeNaive(); // TODO(proj3_part2): Replace this!
+
+        //pass 1
+        Map<Set<String>, QueryOperator> pass1Map = new HashMap<>();
+        for (String table : this.tableNames) {
+            QueryOperator op = minCostSingleAccess(table);
+            pass1Map.put(new HashSet<String>() {{
+                add(table);
+            }}, op);
+        }
+        //pass i
+        Map<Set<String>, QueryOperator> result = pass1Map;
+        for (int i = 1; i < this.tableNames.size(); i++) {
+            result = minCostJoins(result, pass1Map);
+        }
+        this.finalOperator = minCostOperator(result);
+        this.addGroupBy();
+        this.addProject();
+        this.addSort();
+        this.addLimit();
+        return this.finalOperator.iterator();
+//        return this.executeNaive(); // TODO(proj3_part2): Replace this!
     }
 
     // EXECUTE NAIVE ///////////////////////////////////////////////////////////
@@ -755,6 +863,8 @@ public class QueryPlan {
     }
 
     /**
+     * 原生的实现，未采取任何优化
+     * <>br</>
      * Generates a naive QueryPlan in which all joins are at the bottom of the
      * DAG followed by all select predicates, an optional group by operator, an
      * optional project operator, an optional sort operator, and an optional
@@ -769,12 +879,14 @@ public class QueryPlan {
             this.generateIndexPlanNaive(indexPredicate);
         } else {
             // start off with a scan on the first table
+            //初始化finalOperator为整张表的所有记录
             this.finalOperator = new SequentialScanOperator(
                     this.transaction,
                     this.tableNames.get(0)
             );
 
             // add joins, selects, group by's and projects to our plan
+            // 在这些方法中不断地构建运算符树并更新finalOperator为树根
             this.addJoinsNaive();
             this.addSelectsNaive();
             this.addGroupBy();

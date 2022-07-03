@@ -14,21 +14,25 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 
+/**
+ * 查询运算符，对数据库的单个查询可以表示为这些运算符的组合。所有的运算符都拓展自此类并实现了Iterable接口。
+ * 扫描运算符从单个表中获取数据，其余的运算符采用一个或多个输入运算符，转换或者组合输入，并返回一组记录。
+ */
 public abstract class QueryOperator implements Iterable<Record> {
     protected QueryOperator source;
     protected Schema outputSchema;
     protected TableStats stats;
 
     public enum OperatorType {
-        PROJECT,
-        SEQ_SCAN,
-        INDEX_SCAN,
-        JOIN,
-        SELECT,
-        GROUP_BY,
-        SORT,
-        LIMIT,
-        MATERIALIZE
+        PROJECT,    //投影
+        SEQ_SCAN,   //
+        INDEX_SCAN, //索引扫描
+        JOIN,       //连接
+        SELECT,     //选择
+        GROUP_BY,   //分组
+        SORT,       //排序
+        LIMIT,      //截取
+        MATERIALIZE //
     }
 
     private OperatorType type;
@@ -140,6 +144,8 @@ public abstract class QueryOperator implements Iterable<Record> {
     }
 
     /**
+     * 计算此运算符输出记录的模式
+     * <br>
      * Computes the schema of this operator's output records.
      * @return a schema matching the schema of the records of the iterator
      * obtained by calling .iterator()
@@ -147,6 +153,7 @@ public abstract class QueryOperator implements Iterable<Record> {
     protected abstract Schema computeSchema();
 
     /**
+     * 不应该返回null
      * @return an iterator over the output records of this operator
      */
     public abstract Iterator<Record> iterator();
@@ -166,12 +173,14 @@ public abstract class QueryOperator implements Iterable<Record> {
      */
     public BacktrackingIterator<Record> backtrackingIterator() {
         throw new UnsupportedOperationException(
-            "This operator doesn't support backtracking. You may want to " +
-            "use QueryOperator.materialize on it first."
+                "This operator doesn't support backtracking. You may want to " +
+                        "use QueryOperator.materialize on it first."
         );
     }
 
     /**
+     * 对当前的运算符的迭代器截取最多 maxPages (页) 大小的元素，并将这些元素封装到一个可回溯迭代器返回。
+     * <br>
      * @param records an iterator of records
      * @param schema the schema of the records yielded from `records`
      * @param maxPages the maximum number of pages worth of records to consume
@@ -214,6 +223,9 @@ public abstract class QueryOperator implements Iterable<Record> {
     }
 
     /**
+     * 预估下此查询运算符的结果，返回统计信息。
+     * <br>
+     *
      * Estimates the table statistics for the result of executing this query operator.
      *
      * @return estimated TableStats
@@ -221,6 +233,8 @@ public abstract class QueryOperator implements Iterable<Record> {
     public abstract TableStats estimateStats();
 
     /**
+     * 预估下此操作的IO性能
+     * <br>
      * Estimates the IO cost of executing this query operator.
      *
      * @return estimated number of IO's performed

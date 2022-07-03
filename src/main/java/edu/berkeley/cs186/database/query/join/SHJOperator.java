@@ -13,6 +13,14 @@ import edu.berkeley.cs186.database.table.Schema;
 
 import java.util.*;
 
+/**
+ * 使用 Simple Hash Join 进行连接，这是一个简化版的连接符，对左侧记录进行单个分区阶段，然后使用所有右侧记录进行探测，如果任何分区大于给定的内存，
+ * 则抛出 IllegalArgumentException 异常。
+ *
+ * 注意和正规的Grace Hash JOIN 的区别：他并没有对S进行分区，且只对R分区了一次。
+ *
+ * 分区时只用了n-1 个buffer；在探测阶段，需要一个buffer存放S的输入，一个buffer存放join结果，剩下的n-2的buffer存放一个分区的hashtable。
+ */
 public class SHJOperator extends JoinOperator {
     private int numBuffers;
     private Run joinedRecords;
@@ -95,6 +103,9 @@ public class SHJOperator extends JoinOperator {
 
         // Our hash table to build on. The list contains all the records in the
         // left records that hash to the same key
+        /**
+         * 将分区中的元素装入一个hash table，把具有相同key的条目聚在了一起。
+         */
         Map<DataBox, List<Record>> hashTable = new HashMap<>();
 
         // Building stage

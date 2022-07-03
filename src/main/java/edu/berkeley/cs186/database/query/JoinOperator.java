@@ -6,19 +6,28 @@ import edu.berkeley.cs186.database.table.Record;
 import edu.berkeley.cs186.database.table.Schema;
 import edu.berkeley.cs186.database.table.stats.TableStats;
 
+/**
+ * 所有连接运算符的基类。他的子类都位于 {@link edu.berkeley.cs186.database.query.join query/join} 中。
+ * 简化版本，只支持单个字段的等值连接，不支持多个连接字段。可以考虑后期加上。
+ * On 为 表连接的条件，在这里只能有一个，且只能是'=‘.
+ *
+ */
 public abstract class JoinOperator extends QueryOperator {
     public enum JoinType {
-        SNLJ,
-        PNLJ,
-        BNLJ,
-        SORTMERGE,
-        SHJ,
-        GHJ
+        SNLJ,       //simple nested loop join
+        PNLJ,       //page   nested loop join
+        BNLJ,       //chunk  nested loop join
+        SORTMERGE,  //sort-merge algorithm
+        SHJ,        //simple hash join
+        GHJ         //grace  hash join
     }
+    /**连接符类型*/
     protected JoinType joinType;
 
     // the source operators
+    /**左关系来源*/
     private QueryOperator leftSource;
+    /**右关系来源*/
     private QueryOperator rightSource;
 
     // join column indices
@@ -96,11 +105,7 @@ public abstract class JoinOperator extends QueryOperator {
         return r;
     }
 
-    /**
-     * Estimates the table statistics for the result of executing this query operator.
-     *
-     * @return estimated TableStats
-     */
+
     @Override
     public TableStats estimateStats() {
         TableStats leftStats = this.leftSource.estimateStats();
@@ -166,6 +171,7 @@ public abstract class JoinOperator extends QueryOperator {
     // Helpers /////////////////////////////////////////////////////////////////
 
     /**
+     * compare 在当前连接值上两条记录对应的key 。
      * @return 0 if leftRecord and rightRecord match on their join values,
      * a negative value if leftRecord's join value is less than rightRecord's
      * join value, or a positive value if leftRecord's join value is greater

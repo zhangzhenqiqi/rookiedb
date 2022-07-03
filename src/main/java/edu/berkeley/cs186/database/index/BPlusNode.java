@@ -8,7 +8,9 @@ import edu.berkeley.cs186.database.memory.BufferManager;
 import edu.berkeley.cs186.database.memory.Page;
 import edu.berkeley.cs186.database.table.RecordId;
 
+import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -17,7 +19,10 @@ import java.util.Optional;
  */
 abstract class BPlusNode {
     // Core API ////////////////////////////////////////////////////////////////
+
     /**
+     * 返回根据key对应查找到的可能驻留的叶子节点
+     * <p>
      * n.get(k) returns the leaf node on which k may reside when queried from n.
      * For example, consider the following B+ tree (for brevity, only keys are
      * shown; record ids are omitted).
@@ -35,17 +40,18 @@ abstract class BPlusNode {
      *   leaf0                  leaf1                  leaf2
      *
      * inner.get(x) should return
-     *
-     *   - leaf0 when x < 10,
-     *   - leaf1 when 10 <= x < 20, and
-     *   - leaf2 when x >= 20.
-     *
+     * <p>
+     * - leaf0 when x < 10,
+     * - leaf1 when 10 <= x < 20, and
+     * - leaf2 when x >= 20.
+     * <p>
      * Note that inner.get(4) would return leaf0 even though leaf0 doesn't
      * actually contain 4.
      */
     public abstract LeafNode get(DataBox key);
 
     /**
+     * 返回以当前节点为根的子树中的最左侧的叶子节点
      * n.getLeftmostLeaf() returns the leftmost leaf in the subtree rooted by n.
      * In the example above, inner.getLeftmostLeaf() would return leaf0, and
      * leaf1.getLeftmostLeaf() would return leaf1.
@@ -53,6 +59,9 @@ abstract class BPlusNode {
     public abstract LeafNode getLeftmostLeaf();
 
     /**
+     * 关于返回值<split-key,rid> 中，key表示分裂出的节点对应的键值，rid是这个节点的指针（页号表示）。
+     * <br>对于叶子节点分裂，split key就是分裂出的新节点的第一个元素；
+     * <br>而对于内部节点分裂，split key是中间元素，但注意它不包含在新节点的keys中。
      * n.put(k, r) inserts the pair (k, r) into the subtree rooted by n. There
      * are two cases to consider:
      *
@@ -125,11 +134,11 @@ abstract class BPlusNode {
      *   +---+---+---+---+  +---+---+---+---+
      *
      * with a split key of 3.
-     *
+     * <p>
      * DO NOT redistribute entries in any other way besides what we have
      * described. For example, do not move entries between nodes to avoid
      * splitting.
-     *
+     * <p>
      * Our B+ trees do not support duplicate entries with the same key. If a
      * duplicate key is inserted into a leaf node, the tree is left unchanged
      * and a BPlusTreeException is raised.
@@ -137,6 +146,15 @@ abstract class BPlusNode {
     public abstract Optional<Pair<DataBox, Long>> put(DataBox key, RecordId rid);
 
     /**
+     * 这个方法和put极为类似，但他巧妙地地方有很多：
+     * <br> 思路如下：每次其实就是插入一批元素到B+树，
+     * <p></p>在叶子时，一旦把叶子装满仍有data，
+     * 那就新建一个叶子，然后往这个新叶子塞一部分data（取决于data的剩余数目以及页大小和fillFactor的限制），
+     * 将这个新叶子作为一个splitNode返回相应的信息<新叶子中的第一个key,新叶子地址>
+     * <p></p> 在内部节点，肯定是找到最右边那个儿子，然后递归的让这个儿子进行bulkLoad；注意这一步是可以重复的而不只是load一次就返回，
+     * 因为内部节点也不是bulk一次key就满了（bulk一次其实就是走到叶子load，基本上一次就是load一个叶子节点那么多的数据），
+     * 大多数情况肯定是还有剩余的，此时可以重复多次此操作直至触发split。
+     *<p></p>当触发当前节点分裂时返回split info；否则返回Optional.empty
      * n.bulkLoad(data, fillFactor) bulk loads pairs of (k, r) from data into
      * the tree with the given fill factor.
      *
@@ -146,21 +164,21 @@ abstract class BPlusNode {
      * be 1 record more than fillFactor full, then "splits" by creating a right
      * sibling that contains just one record (leaving the original node with
      * the desired fill factor).
-     *
+     * <p>
      * 2. Inner nodes should repeatedly try to bulk load the rightmost child
      * until either the inner node is full (in which case it should split)
      * or there is no more data.
-     *
+     * <p>
      * fillFactor should ONLY be used for determining how full leaf nodes are
      * (not inner nodes), and calculations should round up, i.e. with d=5
      * and fillFactor=0.75, leaf nodes should be 8/10 full.
-     *
+     * <p>
      * You can assume that 0 < fillFactor <= 1 for testing purposes, and that
      * a fill factor outside of that range will result in undefined behavior
      * (you're free to handle those cases however you like).
      */
     public abstract Optional<Pair<DataBox, Long>> bulkLoad(Iterator<Pair<DataBox, RecordId>> data,
-            float fillFactor);
+                                                           float fillFactor);
 
     /**
      * n.remove(k) removes the key k and its corresponding record id from the
@@ -168,33 +186,33 @@ abstract class BPlusNode {
      * REMOVE SHOULD NOT REBALANCE THE TREE. Simply delete the key and
      * corresponding record id. For example, running inner.remove(2) on the
      * example tree above would produce the following tree.
-     *
-     *                               inner
-     *                               +----+----+----+----+
-     *                               | 10 | 20 |    |    |
-     *                               +----+----+----+----+
-     *                              /     |     \
-     *                         ____/      |      \____
-     *                        /           |           \
-     *   +----+----+----+----+  +----+----+----+----+  +----+----+----+----+
-     *   |  1 |  3 |    |    |->| 11 | 12 | 13 |    |->| 21 | 22 | 23 |    |
-     *   +----+----+----+----+  +----+----+----+----+  +----+----+----+----+
-     *   leaf0                  leaf1                  leaf2
-     *
+     * <p>
+     * inner
+     * +----+----+----+----+
+     * | 10 | 20 |    |    |
+     * +----+----+----+----+
+     * /     |     \
+     * ____/      |      \____
+     * /           |           \
+     * +----+----+----+----+  +----+----+----+----+  +----+----+----+----+
+     * |  1 |  3 |    |    |->| 11 | 12 | 13 |    |->| 21 | 22 | 23 |    |
+     * +----+----+----+----+  +----+----+----+----+  +----+----+----+----+
+     * leaf0                  leaf1                  leaf2
+     * <p>
      * Running inner.remove(1) on this tree would produce the following tree:
-     *
-     *                               inner
-     *                               +----+----+----+----+
-     *                               | 10 | 20 |    |    |
-     *                               +----+----+----+----+
-     *                              /     |     \
-     *                         ____/      |      \____
-     *                        /           |           \
-     *   +----+----+----+----+  +----+----+----+----+  +----+----+----+----+
-     *   |  3 |    |    |    |->| 11 | 12 | 13 |    |->| 21 | 22 | 23 |    |
-     *   +----+----+----+----+  +----+----+----+----+  +----+----+----+----+
-     *   leaf0                  leaf1                  leaf2
-     *
+     * <p>
+     * inner
+     * +----+----+----+----+
+     * | 10 | 20 |    |    |
+     * +----+----+----+----+
+     * /     |     \
+     * ____/      |      \____
+     * /           |           \
+     * +----+----+----+----+  +----+----+----+----+  +----+----+----+----+
+     * |  3 |    |    |    |->| 11 | 12 | 13 |    |->| 21 | 22 | 23 |    |
+     * +----+----+----+----+  +----+----+----+----+  +----+----+----+----+
+     * leaf0                  leaf1                  leaf2
+     * <p>
      * Running inner.remove(3) would then produce the following tree:
      *
      *                               inner
@@ -214,10 +232,14 @@ abstract class BPlusNode {
     public abstract void remove(DataBox key);
 
     // Helpers /////////////////////////////////////////////////////////////////
-    /** Get the page on which this node is persisted. */
+
+    /**
+     * Get the page on which this node is persisted.
+     */
     abstract Page getPage();
 
     // Pretty Printing /////////////////////////////////////////////////////////
+
     /**
      * S-expressions (or sexps) are a compact way of encoding nested tree-like
      * structures (sort of like how JSON is a way of encoding nested dictionaries
@@ -233,9 +255,9 @@ abstract class BPlusNode {
      *   +---------+---------+  +---------+---------+
      *
      * has the following sexp
-     *
-     *   (((1 (1 1)) (2 (2 2))) 3 ((3 (3 3)) (4 (4 4))))
-     *
+     * <p>
+     * (((1 (1 1)) (2 (2 2))) 3 ((3 (3 3)) (4 (4 4))))
+     * <p>
      * Here, (1 (1 1)) represents the mapping from key 1 to record id (1, 1).
      */
     public abstract String toSexp();
@@ -247,10 +269,16 @@ abstract class BPlusNode {
     public abstract String toDot();
 
     // Serialization ///////////////////////////////////////////////////////////
-    /** n.toBytes() serializes n. */
+
+    /**
+     * 将当前节点序列化为字节流
+     *
+     * @return
+     */
     public abstract byte[] toBytes();
 
     /**
+     * 根据文件在内存中生成对应的B+树节点，对应这个page
      * BPlusNode.fromBytes(m, p) loads a BPlusNode from page `pageNum`.
      */
     public static BPlusNode fromBytes(BPlusTreeMetadata metadata, BufferManager bufferManager,
@@ -271,4 +299,15 @@ abstract class BPlusNode {
             p.unpin();
         }
     }
+
+
+    // List Utils  ////////////////////////////////////////////////////
+    static <E> ArrayList<E> subList(List<E> list, int fromIndex, int size) {
+        ArrayList<E> newList = new ArrayList<>(size);
+        for (int i = 0; i < size; i++) {
+            newList.add(list.get(fromIndex + i));
+        }
+        return newList;
+    }
+
 }

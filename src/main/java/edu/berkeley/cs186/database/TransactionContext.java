@@ -93,6 +93,7 @@ public abstract class TransactionContext implements AutoCloseable {
 
     // Temp Tables and Aliasing ////////////////////////////////////////////////
     /**
+     * 创建一个临时表，存放临时数据。
      * Create a temporary table within this transaction.
      *
      * @param schema the table schema

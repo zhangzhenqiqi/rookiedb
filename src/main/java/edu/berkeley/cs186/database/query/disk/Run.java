@@ -9,6 +9,9 @@ import edu.berkeley.cs186.database.table.Schema;
 import java.util.List;
 
 /**
+ * Run 表示磁盘上的一部分空间。这对于外部排序、外部散列很有用，因为需要将中间的数据暂存到磁盘上。
+ * 中间可能有多个阶段，每个阶段产生的结果都需要暂存以供下一阶段使用，使用完之后需要回收内存。
+ * <br>
  * A run represents a section of space on disk that we can append records to or
  * read from. This is useful for external sorting to store records while we
  * aren't using them and free up memory. Automatically buffers reads and writes

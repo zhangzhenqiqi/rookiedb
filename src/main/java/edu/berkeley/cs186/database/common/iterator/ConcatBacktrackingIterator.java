@@ -5,6 +5,8 @@ import java.util.List;
 import java.util.NoSuchElementException;
 
 /**
+ * 将一组回溯迭代器连接在一起形成的迭代器。
+ * <br>
  * Iterator that concatenates a group of backtracking iterables together.
  * For example, if you had backtracking iterators containing the following:
  * - [1,2,3]
