@@ -702,6 +702,7 @@ public class TestRecoveryManager {
         LSNs.add(logManager.appendToLog(new AbortTransactionLogRecord(2L, LSNs.get(5)))); // 6
         LSNs.add(logManager.appendToLog(new BeginCheckpointLogRecord())); // 7
 
+
         // 2. Simulate database shutdown
         // flush everything - recovery tests should always start
         // with a clean load from disk, and here we want everything sent to disk first.
@@ -818,6 +819,17 @@ public class TestRecoveryManager {
 
         recoveryManager.restartAnalysis();
 
+        /*{
+            //debug phase
+            Iterator<LogRecord> its = logManager.scanFrom(10000);
+            while (its.hasNext()) {
+                LogRecord logRecord = its.next();
+                System.out.println(logRecord);
+                System.out.println(logRecord.toBytes().length);
+            }
+        }*/
+
+
         // check log
         Iterator<LogRecord> logs = logManager.scanFrom(20000L);
         assertEquals(new EndTransactionLogRecord(2L, LSNs.get(8)), logs.next());
@@ -879,7 +891,7 @@ public class TestRecoveryManager {
             }}
         ))); // 9
 
-        logManager.rewriteMasterRecord(new MasterLogRecord(LSNs.get(5)));
+        logManager.rewriteMasterRecord(new MasterLogRecord(LSNs.get(4)));
 
         // flush everything - recovery tests should always start
         // with a clean load from disk, and here we want everything sent to disk first.

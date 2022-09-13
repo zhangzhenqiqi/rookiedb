@@ -13,6 +13,7 @@ import java.util.*;
 import java.util.function.Function;
 
 /**
+ * 表达式是一组操作、文字值、列名，可以在查询期间进行计算。
  * Expressions are groups of operations, literal values, and column names that
  * can be evaluated during a query. Some examples of expressions:
  *   1 + 1
@@ -45,6 +46,7 @@ public abstract class Expression {
     protected Schema schema = null;
 
     // Whether or not the given expression contains an aggregate function.
+    /**给定的表达式是否包含了聚合函数*/
     protected boolean hasAgg = false;
 
     // Subexpressions. For example, the expression `2 + (3 * 11)` is comprised

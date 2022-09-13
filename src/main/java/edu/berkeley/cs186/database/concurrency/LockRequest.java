@@ -6,6 +6,9 @@ import java.util.Collections;
 import java.util.List;
 
 /**
+ * 表示对事务队列的锁定请求，请求lock并释放releasedLocks中的所有内容。
+ * releasedLocks中的所有东西都应该在事务被解锁之前被释放。
+ * <p>
  * Represents a lock request on the queue for `transaction`, requesting `lock`
  * and releasing everything in `releasedLocks`. `lock` should be granted and
  * everything in `releasedLocks` should be released *before* the transaction is

@@ -3,6 +3,7 @@ package edu.berkeley.cs186.database.common;
 import java.nio.ByteOrder;
 
 /**
+ * 为什么不直接用 ByteBuffer类，多包装一层啥也没干
  * Wrapper around java.nio.ByteBuffer to implement our Buffer interface.
  *
  * Buffers are used to store and sequences of bytes, for example when we want

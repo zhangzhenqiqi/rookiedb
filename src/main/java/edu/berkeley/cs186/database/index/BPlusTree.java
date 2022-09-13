@@ -152,7 +152,7 @@ public class BPlusTree {
     public Optional<RecordId> get(DataBox key) {
         typecheck(key);
         // TODO(proj4_integration): Update the following line
-        LockUtil.ensureSufficientLockHeld(lockContext, LockType.NL);
+        LockUtil.ensureSufficientLockHeld(lockContext, LockType.S);
 
         // TODO(proj2): implement
         LeafNode leafNode = root.get(key);
@@ -170,6 +170,7 @@ public class BPlusTree {
     }
 
     /**
+     * 与get（key）等价，他只是返回一个迭代器。
      * scanEqual(k) is equivalent to get(k) except that it returns an iterator
      * instead of an Optional. That is, if get(k) returns Optional.empty(),
      * then scanEqual(k) returns an empty iterator. If get(k) returns
@@ -179,7 +180,7 @@ public class BPlusTree {
     public Iterator<RecordId> scanEqual(DataBox key) {
         typecheck(key);
         // TODO(proj4_integration): Update the following line
-        LockUtil.ensureSufficientLockHeld(lockContext, LockType.NL);
+        LockUtil.ensureSufficientLockHeld(lockContext, LockType.S);
 
         Optional<RecordId> rid = get(key);
         if (rid.isPresent()) {
@@ -262,6 +263,9 @@ public class BPlusTree {
      * 第一个儿子就是oldRoot，第二个就是返回的splitNode
      */
     private void splitRoot(Pair<DataBox, Long> splitInfo) {
+
+//        LockUtil.ensureSufficientLockHeld(lockContext, LockType.X);
+
         List<DataBox> keys = new ArrayList<>();
         keys.add(splitInfo.getFirst());
         List<Long> children = new ArrayList<>();
@@ -283,7 +287,7 @@ public class BPlusTree {
     public void put(DataBox key, RecordId rid) {
         typecheck(key);
         // TODO(proj4_integration): Update the following line
-        LockUtil.ensureSufficientLockHeld(lockContext, LockType.NL);
+        LockUtil.ensureSufficientLockHeld(lockContext, LockType.X);
 
         // TODO(proj2): implement
         // Note: You should NOT update the root variable directly.
@@ -349,7 +353,7 @@ public class BPlusTree {
     public void remove(DataBox key) {
         typecheck(key);
         // TODO(proj4_integration): Update the following line
-        LockUtil.ensureSufficientLockHeld(lockContext, LockType.NL);
+        LockUtil.ensureSufficientLockHeld(lockContext, LockType.S);
 
         // TODO(proj2): implement
         root.remove(key);

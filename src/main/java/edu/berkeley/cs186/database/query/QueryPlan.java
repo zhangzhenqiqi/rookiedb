@@ -13,7 +13,6 @@ import java.util.*;
 
 /**
  * 查询计划是查询运算符的组合，它提供了查询的执行方式。
- * 如果嵌套select，如何执行呢？？
  * 默认使用别名即可。你一旦起了别名就只能用这个别名！不可以同时有多个table_name,在MySQL中也是这样的。
  * QueryPlan provides a set of functions to generate simple queries. Calling the
  * methods corresponding to SQL syntax stores the information in the QueryPlan,
@@ -464,6 +463,7 @@ public class QueryPlan {
     }
 
     /**
+     * leftColumnName 是 QueryPlan 中已存在的字段，rightColumnName 是新加入的table的字段
      * Join the leftColumnName column of the existing queryplan against the
      * rightColumnName column of tableName, aliased as aliasTableName.
      *
@@ -619,6 +619,7 @@ public class QueryPlan {
                 except = i;
             }
         }
+        //选择下放
         minOp = addEligibleSelections(minOp, except);
         return minOp;
     }

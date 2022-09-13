@@ -9,6 +9,8 @@ import edu.berkeley.cs186.database.concurrency.LockUtil;
 import edu.berkeley.cs186.database.io.PageException;
 
 /**
+ * 表示加载到内存中的page，包装着缓冲器帧
+ * <p></p>
  * Represents a page loaded in memory (as opposed to the buffer frame it's in). Wraps
  * around buffer manager frames, and requests the page be loaded into memory as necessary.
  */
@@ -182,6 +184,9 @@ public class Page {
     }
 
     /**
+     * 对Page数据的一个缓冲，关于page的所有读写都围绕Page#readBytes()和Page#writeBytes()进行，
+     * Page中有一个public getBuffer()方法可以得到一个PageBuffer从而对页面读写。
+     * <p></p>
      * Implementation of Buffer for the page data. All reads/writes ultimately wrap around
      * Page#readBytes and Page#writeBytes, which delegates work to the buffer manager.
      */
@@ -208,7 +213,7 @@ public class Page {
         @Override
         public Buffer get(byte[] dst, int offset, int length) {
             // TODO(proj4_part2): Update the following line
-            LockUtil.ensureSufficientLockHeld(lockContext, LockType.NL);
+            LockUtil.ensureSufficientLockHeld(lockContext, LockType.S);
             Page.this.readBytes(this.offset + offset, length, dst);
             return this;
         }
@@ -224,7 +229,7 @@ public class Page {
         @Override
         public Buffer put(byte[] src, int offset, int length) {
             // TODO(proj4_part2): Update the following line
-            LockUtil.ensureSufficientLockHeld(lockContext, LockType.NL);
+            LockUtil.ensureSufficientLockHeld(lockContext, LockType.X);
             Page.this.writeBytes(this.offset + offset, length, src);
             return this;
         }

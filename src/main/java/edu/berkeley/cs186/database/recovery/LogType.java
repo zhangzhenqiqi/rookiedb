@@ -48,4 +48,8 @@ public enum LogType {
         }
         return values[x - 1];
     }
+
+    public boolean isCLR() {
+        return getValue() > 11;
+    }
 }

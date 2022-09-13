@@ -1,6 +1,9 @@
 package edu.berkeley.cs186.database.memory;
 
 /**
+ * LRU-最近最少使用算法，双向链表实现，链表尾部的元素是最近使用的，所以淘汰时选择链表前面的元素。
+ * 在每个frame当中存储了自己在链表中对应的元素。
+ *
  * Implementation of LRU eviction policy, which works by creating a
  * doubly-linked list between frames in order of ascending use time.
  */

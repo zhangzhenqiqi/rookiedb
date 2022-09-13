@@ -6,6 +6,10 @@ import java.util.Iterator;
 import java.util.List;
 
 /**
+ * 此类表示资源的全名。资源的名称是一个有序的字符串元组，并且以第一个元素开头的元组的任何子序列都是层次结构中更高资源的名称。
+ * <p>
+ * 例如["database","table_x",10],他的祖先为["database"],["database","table_x"]。
+ * <p>
  * This class represents the full name of a resource. The name of a resource is
  * an ordered tuple of strings, and any subsequence of the tuple starting with
  * the first element is the name of a resource higher up on the hierarchy.
@@ -19,6 +23,11 @@ import java.util.List;
  */
 public class ResourceName {
     private final List<String> names;
+
+    public int getDepth() {
+        if (names == null) return -1;
+        return names.size();
+    }
 
     public ResourceName(String name) {
         this(Collections.singletonList(name));
@@ -38,6 +47,7 @@ public class ResourceName {
     }
 
     /**
+     * 返回此资源的父资源，或者null。
      * @return null if this resource has no parent, a copy of this resource's
      * parent ResourceName otherwise.
      */
@@ -49,7 +59,7 @@ public class ResourceName {
     }
 
     /**
-     * @return true if this resource is a descendant of `other`, false otherwise
+     * @return 返回 true 如果此资源是other的后代，否则返回false。
      */
     boolean isDescendantOf(ResourceName other) {
         if (other.names.size() >= names.size()) {

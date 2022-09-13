@@ -19,6 +19,10 @@ import java.util.function.Function;
 import java.util.function.UnaryOperator;
 
 /**
+ * 内部事务特定方法，用于实现DataBase部分。
+ * 当前线程上运行的事务的上下文可以通过getTransaction()获取，此事务上下文实现假设一次只有一个事务在一个线程上运行，
+ * 并且除了unblock()方法外，没有任何方法是从与事务关联的线程之外的其他线程调用的。
+ *
  * Internal transaction-specific methods, used for implementing parts of the database.
  *
  * The transaction context for the transaction currently running on the current thread
@@ -32,6 +36,7 @@ import java.util.function.UnaryOperator;
  * block() is called.
  */
 public abstract class TransactionContext implements AutoCloseable {
+    //thread-id -> trx ctx
     static Map<Long, TransactionContext> threadTransactions = new ConcurrentHashMap<>();
     private boolean blocked = false;
     private boolean startBlock = false;
@@ -241,6 +246,7 @@ public abstract class TransactionContext implements AutoCloseable {
     }
 
     /**
+     * 阻塞当前事务（包含 线程）
      * Blocks the transaction (and thread). prepareBlock() must be called first.
      */
     public void block() {

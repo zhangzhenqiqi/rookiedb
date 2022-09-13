@@ -15,6 +15,14 @@ import edu.berkeley.cs186.database.recovery.records.MasterLogRecord;
 import java.util.*;
 
 /**
+ * 每页最多允许10000个日志条目。索引最后四位是日志开始的页内偏移量。日志条目不是固定宽度，所以向后迭代是不方便的，
+ * 利于向前迭代，知道cur以及cur.prev，[cur.prev,cur)就是上一条日志的内容。
+ * 第0页是为master记录保留的，它只包含一些日志条目：主记录，LSN 为 0，后跟一个空的开始和结束检查点记录。
+ * master记录是整个日志中唯一可以重写的记录。master记录可以记下checkpoint的最新的信息，下一次恢复可以直接从最近的checkpoint开始。
+ *
+ * 日志在flush disk时，是严格按照递增顺序的，不会随意的挑选log page刷新，就像一个管道一样是有序的。日志是不可更改的，
+ * 所以一页一页日志不断追加地刷新到disk中。
+ * <p></p>
  * The LogManager is responsible for interfacing with the log itself. The log is stored
  * on its own partition (partition 0). Since log pages are never deleted, the page number
  * is always increasing, so we assign LSNs as follow:
@@ -71,6 +79,8 @@ public class LogManager implements Iterable<LogRecord>, AutoCloseable {
     }
 
     /**
+     * 向日志中追加一条日志记录,并返回这条记录对应的的LSN。
+     * <p></p>
      * Appends a log record to the log.
      * @param record log record to append to the log
      * @return LSN of new log record
@@ -105,6 +115,8 @@ public class LogManager implements Iterable<LogRecord>, AutoCloseable {
     }
 
     /**
+     * 得到指定的日志记录。
+     * <p></p>
      * Fetches a specific log record.
      * @param LSN LSN of record to fetch
      * @return log record with the specified LSN
@@ -127,6 +139,8 @@ public class LogManager implements Iterable<LogRecord>, AutoCloseable {
     }
 
     /**
+     * 将日志刷新到至少指定的记录。按照页面刷新，相当于刷新到包含指定LSN的页面为止。
+     * <p></p>
      * Flushes the log to at least the specified record,
      * essentially flushing up to and including the page
      * that contains the record specified by the LSN.

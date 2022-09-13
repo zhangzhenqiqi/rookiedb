@@ -40,6 +40,14 @@ import java.util.function.Function;
 import java.util.function.UnaryOperator;
 
 /**
+ * 前三个分区是固定的，分区 0用于日志记录；分区1是数据库表的元信息；分区2是表的索引的元信息。
+ * 其余分区用于表的存储,即索引数据和表数据都在其他分区上。在新建表和索引时都会新建一个分区让其使用。
+ * 而索引分区中包含两种page类型：LeafNode page 以及 InnerNode page，根据页面上第一个字节可以分辨出；叶子
+ * 节点保存的是指向真实数据的虚拟页号！也就是指向表数据所在的分区上的页面，根据偏移量可以定位数据。
+ *
+ * 索引数据在存储的字节安排可以去看下InnerNode#toBytes() 和 LeafNode#toBytes()；而数据由于长度固定，只要知道配置信息，
+ * 根据页号和偏移量便可以读出。
+ * <p></p>
  * Database objects keeps track of transactions, tables, and indices
  * and delegates work to its disk manager, buffer manager, lock manager and
  * recovery manager.
@@ -120,7 +128,7 @@ public class Database implements AutoCloseable {
      * @param fileDir the directory to put the table files in
      */
     public Database(String fileDir) {
-        this (fileDir, DEFAULT_BUFFER_SIZE);
+        this(fileDir, DEFAULT_BUFFER_SIZE);
     }
 
     /**
@@ -187,7 +195,7 @@ public class Database implements AutoCloseable {
 
         diskSpaceManager = new DiskSpaceManagerImpl(fileDir, recoveryManager);
         bufferManager = new BufferManager(diskSpaceManager, recoveryManager, numMemoryPages,
-                                              policy);
+                policy);
 
         // create log partition
         if (!initialized) diskSpaceManager.allocPart(0);
@@ -240,16 +248,16 @@ public class Database implements AutoCloseable {
         PageDirectory tableInfoPageDir = new PageDirectory(bufferManager, 1, tableInfoPage0, (short) 0,
                 tableInfoContext);
         tableMetadata = new Table(TABLE_INFO_TABLE_NAME, getTableInfoSchema(), tableInfoPageDir,
-                              tableInfoContext, stats);
+                tableInfoContext, stats);
     }
 
     // create _metadata.indices
     private void initIndexInfo() {
         long indexInfoPage0 = DiskSpaceManager.getVirtualPageNum(2, 0);
         diskSpaceManager.allocPage(indexInfoPage0);
-        LockContext indexInfoContext =  new DummyLockContext("_dummyIndexInfo");
+        LockContext indexInfoContext = new DummyLockContext("_dummyIndexInfo");
         PageDirectory pageDirectory = new PageDirectory(bufferManager, 2, indexInfoPage0, (short) 0,
-                                              indexInfoContext);
+                indexInfoContext);
         indexMetadata = new Table(INDEX_INFO_TABLE_NAME, getIndexInfoSchema(), pageDirectory, indexInfoContext, stats);
     }
 
@@ -269,7 +277,7 @@ public class Database implements AutoCloseable {
         PageDirectory indexInfoPageDir = new PageDirectory(bufferManager, 2,
                 DiskSpaceManager.getVirtualPageNum(2, 0), (short) 0, indexInfoContext);
         indexMetadata = new Table(INDEX_INFO_TABLE_NAME, getIndexInfoSchema(), indexInfoPageDir,
-                              indexInfoContext, stats);
+                indexInfoContext, stats);
         indexMetadata.setFullPageRecords();
     }
 
@@ -396,19 +404,29 @@ public class Database implements AutoCloseable {
 
     // Trims and lowercases table and column names so that lookups are
     // case-insensitive and format-insensitive
+
+    /**
+     * 返回处理过后的表名/字段名，使其大小写不敏感且忽略前后空格。
+     * @param name
+     * @return
+     */
     private String normalize(String name) {
         return name.trim().toLowerCase();
     }
 
     /**
+     * 扫描table的元信息
      * @return (rid, metadata) pairs for all of the tables currently in the
      * database. Assumes that caller has already acquired necessary locks on
      * metadata.
      */
     private List<Pair<RecordId, TableMetadata>> scanTableMetadata() {
         List<Pair<RecordId, TableMetadata>> result = new ArrayList<>();
-        synchronized(tableMetadata) {
-            for(RecordId rid: (Iterable<RecordId>) tableMetadata::ridIterator) {
+        synchronized (tableMetadata) {
+            BacktrackingIterator<RecordId> ridIter = tableMetadata.ridIterator();
+
+//            System.out.println("debug");
+            for (RecordId rid : (Iterable<RecordId>) tableMetadata::ridIterator) {
                 Record record = tableMetadata.getRecord(rid);
                 TableMetadata metadata = new TableMetadata(record);
                 result.add(new Pair<>(rid, metadata));
@@ -419,8 +437,8 @@ public class Database implements AutoCloseable {
 
     public List<Record> scanTableMetadataRecords() {
         List<Record> result = new ArrayList<>();
-        synchronized(tableMetadata) {
-            for(RecordId rid: (Iterable<RecordId>) tableMetadata::ridIterator) {
+        synchronized (tableMetadata) {
+            for (RecordId rid : (Iterable<RecordId>) tableMetadata::ridIterator) {
                 Record record = tableMetadata.getRecord(rid);
                 result.add(record);
             }
@@ -429,6 +447,7 @@ public class Database implements AutoCloseable {
     }
 
     /**
+     * 返回表tableName的元信息
      * @param tableName
      * @return the (rid, metadata) pair for the table specified by `tableName`'s
      * entry inside of _metadata.tables. Returns null if the table does not exist.
@@ -460,8 +479,8 @@ public class Database implements AutoCloseable {
      */
     private List<Pair<RecordId, BPlusTreeMetadata>> scanIndexMetadata() {
         List<Pair<RecordId, BPlusTreeMetadata>> result = new ArrayList<>();
-        synchronized(indexMetadata) {
-            for(RecordId rid: (Iterable<RecordId>) indexMetadata::ridIterator) {
+        synchronized (indexMetadata) {
+            for (RecordId rid : (Iterable<RecordId>) indexMetadata::ridIterator) {
                 Record record = indexMetadata.getRecord(rid);
                 BPlusTreeMetadata metadata = new BPlusTreeMetadata(record);
                 result.add(new Pair<>(rid, metadata));
@@ -472,8 +491,8 @@ public class Database implements AutoCloseable {
 
     public List<Record> scanIndexMetadataRecords() {
         List<Record> result = new ArrayList<>();
-        synchronized(indexMetadata) {
-            for(RecordId rid: (Iterable<RecordId>) indexMetadata::ridIterator) {
+        synchronized (indexMetadata) {
+            for (RecordId rid : (Iterable<RecordId>) indexMetadata::ridIterator) {
                 Record record = indexMetadata.getRecord(rid);
                 result.add(record);
             }
@@ -493,7 +512,7 @@ public class Database implements AutoCloseable {
         columnName = normalize(columnName);
         // We'll need shared access to the entry if it exists in order to read it
         LockUtil.ensureSufficientLockHeld(getColumnIndexMetadataContext(tableName, columnName), LockType.S);
-        for (Pair<RecordId, BPlusTreeMetadata> p: scanIndexMetadata()) {
+        for (Pair<RecordId, BPlusTreeMetadata> p : scanIndexMetadata()) {
             BPlusTreeMetadata metadata = p.getSecond();
             String currTableName = normalize(metadata.getTableName());
             String currColumnName = normalize(metadata.getColName());
@@ -515,7 +534,7 @@ public class Database implements AutoCloseable {
         tableName = normalize(tableName);
         // We'll need shared access to the entry if it exists in order to read it
         LockUtil.ensureSufficientLockHeld(getTableIndexMetadataContext(tableName), LockType.S);
-        for (Pair<RecordId, BPlusTreeMetadata> p: scanIndexMetadata()) {
+        for (Pair<RecordId, BPlusTreeMetadata> p : scanIndexMetadata()) {
             BPlusTreeMetadata metadata = p.getSecond();
             String currTableName = normalize(metadata.getTableName());
             if (currTableName.equals(tableName)) {
@@ -674,7 +693,7 @@ public class Database implements AutoCloseable {
             String columnName = normalize(metadata.getColName());
             // Exclusive access is needed on the index metadata entry to update it
             LockUtil.ensureSufficientLockHeld(getColumnIndexMetadataContext(tableName, columnName), LockType.X);
-            for (Pair<RecordId, BPlusTreeMetadata> p: scanIndexMetadata()) {
+            for (Pair<RecordId, BPlusTreeMetadata> p : scanIndexMetadata()) {
                 RecordId rid = p.getFirst();
                 BPlusTreeMetadata currMetadata = p.getSecond();
                 String currColumnName = normalize(currMetadata.getColName());
@@ -703,7 +722,7 @@ public class Database implements AutoCloseable {
             } else {
                 try {
                     return new SortOperator(this, new SequentialScanOperator(this, tableName),
-                        columnName).iterator();
+                            columnName).iterator();
                 } catch (Exception e2) {
                     throw new DatabaseException(e2);
                 }
@@ -752,7 +771,7 @@ public class Database implements AutoCloseable {
             Schema s = tab.getSchema();
             List<String> colNames = s.getFieldNames();
 
-            for (Pair<RecordId, BPlusTreeMetadata> p: getTableIndicesMetadata(tableName)) {
+            for (Pair<RecordId, BPlusTreeMetadata> p : getTableIndicesMetadata(tableName)) {
                 BPlusTree tree = indexFromMetadata(p.getSecond());
                 String column = tree.getMetadata().getColName();
                 DataBox key = record.getValue(colNames.indexOf(column));
@@ -769,7 +788,7 @@ public class Database implements AutoCloseable {
             Record record = tab.deleteRecord(rid);
             List<String> colNames = s.getFieldNames();
 
-            for (Pair<RecordId, BPlusTreeMetadata> p: getTableIndicesMetadata(tableName)) {
+            for (Pair<RecordId, BPlusTreeMetadata> p : getTableIndicesMetadata(tableName)) {
                 BPlusTree tree = indexFromMetadata(p.getSecond());
                 String column = tree.getMetadata().getColName();
                 DataBox key = record.getValue(colNames.indexOf(column));
@@ -792,7 +811,7 @@ public class Database implements AutoCloseable {
             Record old = tab.updateRecord(rid, updated);
             List<String> colNames = s.getFieldNames();
 
-            for (Pair<RecordId, BPlusTreeMetadata> p: getTableIndicesMetadata(tableName)) {
+            for (Pair<RecordId, BPlusTreeMetadata> p : getTableIndicesMetadata(tableName)) {
                 BPlusTree tree = indexFromMetadata(p.getSecond());
                 String column = tree.getMetadata().getColName();
                 DataBox oldKey = old.getValue(colNames.indexOf(column));
@@ -817,7 +836,7 @@ public class Database implements AutoCloseable {
             int pindex = -1;
             if (predColumnName != null) pindex = s.findField(predColumnName);
 
-            while(recordIds.hasNext()) {
+            while (recordIds.hasNext()) {
                 RecordId curRID = recordIds.next();
                 Record cur = getRecord(tableName, curRID);
                 List<DataBox> recordCopy = cur.getValues();
@@ -836,7 +855,7 @@ public class Database implements AutoCloseable {
             Schema s = tab.getSchema();
             int uindex = s.findField(targetColumnName);
 
-            while(recordIds.hasNext()) {
+            while (recordIds.hasNext()) {
                 RecordId curRID = recordIds.next();
                 Record cur = getRecord(tableName, curRID);
                 List<DataBox> recordCopy = cur.getValues();
@@ -858,7 +877,7 @@ public class Database implements AutoCloseable {
             Schema s = tab.getSchema();
             int pindex = s.getFieldNames().indexOf(predColumnName);
 
-            while(recordIds.hasNext()) {
+            while (recordIds.hasNext()) {
                 RecordId curRID = recordIds.next();
                 Record cur = getRecord(tableName, curRID);
                 List<DataBox> recordCopy = cur.getValues();
@@ -874,7 +893,7 @@ public class Database implements AutoCloseable {
             tableName = tab.getName();
             Iterator<RecordId> recordIds = tab.ridIterator();
 
-            while(recordIds.hasNext()) {
+            while (recordIds.hasNext()) {
                 RecordId curRID = recordIds.next();
                 Record cur = getRecord(tableName, curRID);
                 DataBox cond = condition.apply(cur);
@@ -894,8 +913,8 @@ public class Database implements AutoCloseable {
             Schema qualified = new Schema();
             for (int i = 0; i < schema.size(); i++) {
                 qualified.add(
-                    tableName + "." + schema.getFieldName(i),
-                    schema.getFieldType(i)
+                        tableName + "." + schema.getFieldName(i),
+                        schema.getFieldType(i)
                 );
             }
             return qualified;
@@ -915,7 +934,8 @@ public class Database implements AutoCloseable {
         public int getTreeOrder(String tableName, String columnName) {
             if (aliases.containsKey(tableName)) tableName = aliases.get(tableName);
             Pair<RecordId, BPlusTreeMetadata> pair = getColumnIndexMetadata(tableName, columnName);
-            if (pair == null) throw new DatabaseException("Index `" + tableName + "." + columnName + "` does not exist!");
+            if (pair == null)
+                throw new DatabaseException("Index `" + tableName + "." + columnName + "` does not exist!");
             return pair.getSecond().getOrder();
         }
 
@@ -923,7 +943,8 @@ public class Database implements AutoCloseable {
         public int getTreeHeight(String tableName, String columnName) {
             if (aliases.containsKey(tableName)) tableName = aliases.get(tableName);
             Pair<RecordId, BPlusTreeMetadata> pair = getColumnIndexMetadata(tableName, columnName);
-            if (pair == null) throw new DatabaseException("Index `" + tableName + "." + columnName + "` does not exist!");
+            if (pair == null)
+                throw new DatabaseException("Index `" + tableName + "." + columnName + "` does not exist!");
             return pair.getSecond().getHeight();
         }
 
@@ -931,6 +952,20 @@ public class Database implements AutoCloseable {
         public void close() {
             try {
                 // TODO(proj4_part2)
+
+//                TransactionContext transactionContext = TransactionContext.getTransaction();
+                List<Lock> locks = lockManager.getLocks(this);
+
+                //释放锁的顺序应该自底向上，这里排序按照深度，越深的锁排在前面优先释放
+                Collections.sort(locks, (Lock l1, Lock l2) -> {
+                    ResourceName name1 = l1.name, name2 = l2.name;
+                    return -name1.getDepth() + name2.getDepth();
+                });
+
+                for (Lock lock : locks) {
+                    LockContext lockContext = LockContext.fromResourceName(lockManager, lock.name);
+                    lockContext.release(this);
+                }
                 return;
             } catch (Exception e) {
                 // There's a chance an error message from your release phase
@@ -1020,6 +1055,7 @@ public class Database implements AutoCloseable {
                 return;
             }
 
+            //如果不是在recovery阶段，才会执行end。也就是说在recovery阶段不会执行end()
             if (!this.recoveryTransaction) {
                 recoveryManager.end(transNum);
             }
@@ -1033,6 +1069,11 @@ public class Database implements AutoCloseable {
             return transNum;
         }
 
+        /**
+         * 创建一个table
+         * @param s schema of new table
+         * @param tableName name of new table
+         */
         @Override
         public void createTable(Schema s, String tableName) {
             if (tableName.contains(".") || tableName.contains(" ") || tableName.length() == 0) {
@@ -1044,7 +1085,7 @@ public class Database implements AutoCloseable {
 
             // To check whether the table exists we just need to read that table's metadata, if it exists
             Pair<RecordId, TableMetadata> pair = getTableMetadata(tableName);
-            if (pair != null) {
+            if (pair != null) {//已经存在这个表名
                 throw new DatabaseException("table `" + tableName + "` already exists");
             }
             TableMetadata metadata = new TableMetadata(tableName);
@@ -1070,13 +1111,13 @@ public class Database implements AutoCloseable {
             LockUtil.ensureSufficientLockHeld(getTableMetadataContext(tableName), LockType.X);
             LockUtil.ensureSufficientLockHeld(getTableIndexMetadataContext(tableName), LockType.X);
 
-            for (Pair<RecordId, BPlusTreeMetadata> p: getTableIndicesMetadata(tableName)) {
+            for (Pair<RecordId, BPlusTreeMetadata> p : getTableIndicesMetadata(tableName)) {
                 BPlusTreeMetadata tree = p.getSecond();
                 dropIndex(tableName, tree.getColName());
             }
             RecordId rid = getTableMetadata(tableName).getFirst();
             TableMetadata metadata;
-            synchronized(tableMetadata) {
+            synchronized (tableMetadata) {
                 metadata = new TableMetadata(tableMetadata.deleteRecord(rid));
             }
             bufferManager.freePart(metadata.partNum);
@@ -1087,11 +1128,17 @@ public class Database implements AutoCloseable {
             // For something as drastic as dropping all tables we'll want
             // to get an exclusive lock on the entire database.
             LockUtil.ensureSufficientLockHeld(lockManager.databaseContext(), LockType.X);
-            for (Pair<RecordId, TableMetadata> p: scanTableMetadata()) {
+            for (Pair<RecordId, TableMetadata> p : scanTableMetadata()) {
                 dropTable(p.getSecond().tableName);
             }
         }
 
+        /**
+         * 创建索引，相当于 CREATE INDEX tableName_columnName ON tableName(columnName);
+         * @param tableName name of table to create index for
+         * @param columnName name of column to create index on
+         * @param bulkLoad whether to bulk load data
+         */
         @Override
         public void createIndex(String tableName, String columnName, boolean bulkLoad) {
             if (tableName.contains(".") || tableName.contains(" ") || tableName.length() == 0) {
@@ -1181,7 +1228,7 @@ public class Database implements AutoCloseable {
         public void update(String tableName, String targetColumnName, UnaryOperator<DataBox> targetValue,
                            String predColumnName, PredicateOperator predOperator, DataBox predValue) {
             transactionContext.updateRecordWhere(tableName, targetColumnName, targetValue, predColumnName,
-                                                    predOperator, predValue);
+                    predOperator, predValue);
         }
 
         @Override
@@ -1232,8 +1279,8 @@ public class Database implements AutoCloseable {
     }
 
     public void dropDemoTables() {
-        for (String table: demoTables) {
-            try(Transaction t = beginTransaction()) {
+        for (String table : demoTables) {
+            try (Transaction t = beginTransaction()) {
                 t.dropTable(table);
             } catch (DatabaseException e) {
                 // If table doesn't exist, continue
@@ -1246,7 +1293,7 @@ public class Database implements AutoCloseable {
 
         dropDemoTables();
 
-        for (String table: demoTables) {
+        for (String table : demoTables) {
             loadCSV(table);
         }
 
@@ -1260,54 +1307,54 @@ public class Database implements AutoCloseable {
      * @return true if the table already existed in the database, false otherwise
      */
     public boolean loadCSV(String name) throws IOException {
-            InputStream is = Database.class.getClassLoader().getResourceAsStream(name + ".csv");
-            InputStreamReader reader = new InputStreamReader(is, StandardCharsets.UTF_8);
-            BufferedReader buffered = new BufferedReader(reader);
-            String[] header = buffered.readLine().split(",");
-            Schema schema = new Schema();
-            for (int i = 0; i < header.length; i++) {
-                String[] parts = header[i].split(" ", 2);
-                // Must have at least one space separating field and type
-                assert parts.length == 2;
-                String fieldName = parts[0];
-                Type fieldType = Type.fromString(parts[1]);
-                schema.add(fieldName, fieldType);
+        InputStream is = Database.class.getClassLoader().getResourceAsStream(name + ".csv");
+        InputStreamReader reader = new InputStreamReader(is, StandardCharsets.UTF_8);
+        BufferedReader buffered = new BufferedReader(reader);
+        String[] header = buffered.readLine().split(",");
+        Schema schema = new Schema();
+        for (int i = 0; i < header.length; i++) {
+            String[] parts = header[i].split(" ", 2);
+            // Must have at least one space separating field and type
+            assert parts.length == 2;
+            String fieldName = parts[0];
+            Type fieldType = Type.fromString(parts[1]);
+            schema.add(fieldName, fieldType);
+        }
+        List<Record> rows = new ArrayList<>();
+        String row = buffered.readLine();
+        while (row != null) {
+            String[] values = row.split(",");
+            List<DataBox> parsed = new ArrayList<>();
+            assert values.length == schema.size();
+            for (int i = 0; i < values.length; i++) {
+                parsed.add(DataBox.fromString(schema.getFieldType(i), values[i]));
             }
-            List<Record> rows = new ArrayList<>();
-            String row = buffered.readLine();
-            while (row != null) {
-                String[] values = row.split(",");
-                List<DataBox> parsed = new ArrayList<>();
-                assert values.length == schema.size();
-                for (int i = 0; i < values.length; i++) {
-                    parsed.add(DataBox.fromString(schema.getFieldType(i), values[i]));
-                }
-                rows.add(new Record(parsed));
-                row = buffered.readLine();
-            }
+            rows.add(new Record(parsed));
+            row = buffered.readLine();
+        }
 
-            try(Transaction t = beginTransaction()) {
-                t.createTable(schema, name);
-            } catch (DatabaseException e) {
-                if (e.getMessage().contains("already exists")) return true;
-                throw e;
-            }
+        try (Transaction t = beginTransaction()) {
+            t.createTable(schema, name);
+        } catch (DatabaseException e) {
+            if (e.getMessage().contains("already exists")) return true;
+            throw e;
+        }
 
-            // store table stats before inserting rows
-            Pair<RecordId, TableMetadata> pair = this.getTableMetadata(name);
-            if (pair == null) {
-                throw new DatabaseException("Table `" + name + "` does not exist!");
-            }
-            Table tb = tableFromMetadata(pair.getSecond());
+        // store table stats before inserting rows
+        Pair<RecordId, TableMetadata> pair = this.getTableMetadata(name);
+        if (pair == null) {
+            throw new DatabaseException("Table `" + name + "` does not exist!");
+        }
+        Table tb = tableFromMetadata(pair.getSecond());
 
-            try (Transaction t = beginTransaction()) {
-                for (Record r : rows) {
-                    t.insert(name, r);
-                }
+        try (Transaction t = beginTransaction()) {
+            for (Record r : rows) {
+                t.insert(name, r);
             }
+        }
 
-            // refresh histograms so that query cost estimation works
-            tb.buildStatistics(10);
-            return false;
+        // refresh histograms so that query cost estimation works
+        tb.buildStatistics(10);
+        return false;
     }
 }

@@ -8,6 +8,9 @@ import edu.berkeley.cs186.database.table.stats.TableStats;
 
 import java.util.*;
 
+/**
+ * 聚类
+ * */
 class GroupByOperator extends QueryOperator {
     static final Record MARKER = new Record();
     private List<Integer> groupByColumnIndices;
@@ -83,6 +86,7 @@ class GroupByOperator extends QueryOperator {
     }
 
     /**
+     * 将记录按照 规则进行分组 每一组保存在一个临时表中
      * An implementation of Iterator that provides an iterator interface for this operator.
      * Returns a marker record between the records of different groups, e.g.
      * [group 1 record] [group 1 record] [marker record] [group 2 record] ...

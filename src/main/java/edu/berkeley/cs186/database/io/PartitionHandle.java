@@ -17,6 +17,9 @@ import static edu.berkeley.cs186.database.io.DiskSpaceManager.PAGE_SIZE;
 import static edu.berkeley.cs186.database.io.DiskSpaceManagerImpl.DATA_PAGES_PER_HEADER;
 import static edu.berkeley.cs186.database.io.DiskSpaceManagerImpl.MAX_HEADER_PAGES;
 
+/**
+ * 分区句柄，注意这是比较底层的调用，属于磁盘管理
+ * */
 class PartitionHandle implements AutoCloseable {
     // Lock on the partition.
     ReentrantLock partitionLock;
@@ -27,9 +30,12 @@ class PartitionHandle implements AutoCloseable {
 
     // Contents of the master page of this partition
     // Ideally would be an unsigned short array but Java doesn't have unsigned types
+    /**master page 的内容，master[i]表示第i个header page管理的数据页中有多少个数据页被使用。
+     * 理想为short占据2Byte，每个元素代表一个header page,但由于java没有无符号的short类型。*/
     private int[] masterPage;
 
     // Contents of the various header pages of this partition
+    /**此分区 各个 header page 的内容*/
     private byte[][] headerPages;
 
     // Recovery manager
@@ -47,6 +53,7 @@ class PartitionHandle implements AutoCloseable {
     }
 
     /**
+     * 打开os文件，并加载master、header page
      * Opens the OS file and loads master and header pages.
      * @param fileName name of OS file partition is stored in
      */
@@ -55,6 +62,7 @@ class PartitionHandle implements AutoCloseable {
         try {
             this.file = new RandomAccessFile(fileName, "rw");
             this.fileChannel = this.file.getChannel();
+            //文件长度，单位字节
             long length = this.file.length();
             if (length == 0) {
                 // new file, write empty master page
@@ -79,6 +87,9 @@ class PartitionHandle implements AutoCloseable {
         }
     }
 
+    /**
+     * 关闭分区
+     * */
     @Override
     public void close() throws IOException {
         this.partitionLock.lock();
@@ -92,6 +103,7 @@ class PartitionHandle implements AutoCloseable {
     }
 
     /**
+     * 将master page写回磁盘
      * Writes the master page to disk.
      */
     private void writeMasterPage() throws IOException {
@@ -104,6 +116,7 @@ class PartitionHandle implements AutoCloseable {
     }
 
     /**
+     * 将header page 写回磁盘
      * Writes a header page to disk.
      * @param headerIndex which header page
      */
@@ -113,8 +126,9 @@ class PartitionHandle implements AutoCloseable {
     }
 
     /**
+     * 分配一个新的页面在此分区中
      * Allocates a new page in the partition.
-     * @return data page number
+     * @return 返回data page的页号
      */
     int allocPage() throws IOException {
         int headerIndex = -1;
@@ -149,6 +163,7 @@ class PartitionHandle implements AutoCloseable {
     }
 
     /**
+     * 将第headerIndex个header page中的第pageIndex个页面分配出去
      * Allocates a new page in the partition.
      * @param headerIndex index of header page managing new page
      * @param pageIndex index within header page of new page
@@ -173,6 +188,7 @@ class PartitionHandle implements AutoCloseable {
         int pageNum = pageIndex + headerIndex * DATA_PAGES_PER_HEADER;
 
         TransactionContext transaction = TransactionContext.getTransaction();
+        //虚拟页号
         long vpn = DiskSpaceManager.getVirtualPageNum(partNum, pageNum);
         if (transaction != null) {
             recoveryManager.logAllocPage(transaction.getTransNum(), vpn);
@@ -185,6 +201,8 @@ class PartitionHandle implements AutoCloseable {
     }
 
     /**
+     * 将第pageNum个data page进行释放
+     * <p></p>
      * Frees a page in the partition from use.
      * @param pageNum data page number to be freed
      */
@@ -231,6 +249,7 @@ class PartitionHandle implements AutoCloseable {
     }
 
     /**
+     * 读取第pageNum个data page到buf之中
      * Reads in a data page. Assumes that the partition lock is held.
      * @param pageNum data page number to read in
      * @param buf output buffer to be filled with page - assumed to be page size
@@ -244,6 +263,7 @@ class PartitionHandle implements AutoCloseable {
     }
 
     /**
+     * 将buf内容写入到第pageNum个data page中
      * Writes to a data page. Assumes that the partition lock is held.
      * @param pageNum data page number to write to
      * @param buf input buffer with new contents of page - assumed to be page size
@@ -261,6 +281,7 @@ class PartitionHandle implements AutoCloseable {
     }
 
     /**
+     * 检查第pageNum个data page是否尚未被分配出去
      * Checks if page number is for an unallocated data page
      * @param pageNum data page number
      * @return true if page is not valid or not allocated
@@ -278,6 +299,7 @@ class PartitionHandle implements AutoCloseable {
     }
 
     /**
+     * 释放所有的data page
      * Frees all data pages from partition for use
      * @throws IOException
      */
@@ -302,6 +324,7 @@ class PartitionHandle implements AutoCloseable {
     }
 
     /**
+     * 第headerIndex（>=0）个header page在os文件中的offset（Byte）
      * @param headerIndex which header page
      * @return offset in OS file for header page
      */
@@ -318,7 +341,7 @@ class PartitionHandle implements AutoCloseable {
         return (1 + headerIndex * spacingCoeff) * PAGE_SIZE;
     }
 
-    /**
+    /**第pageNum个数据页在os文件中的offset
      * @param pageNum data page number
      * @return offset in OS file for data page
      */

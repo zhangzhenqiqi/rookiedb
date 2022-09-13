@@ -38,10 +38,10 @@ public class Server {
     public static void main(String[] args) {
         // Note: you'll probably want to complete Project 4 before
         // attempting to run this.
-        Database db = new Database("demo", 25, new LockManager());
+//        Database db = new Database("demo", 25, new LockManager());
         
         // Use the following after completing project 5 (recovery)
-        // Database db = new Database("demo", 25, new LockManager(), new ClockEvictionPolicy(), true);
+         Database db = new Database("demo", 25, new LockManager(), new ClockEvictionPolicy(), true);
 
         Server server = new Server();
         server.listen(db);

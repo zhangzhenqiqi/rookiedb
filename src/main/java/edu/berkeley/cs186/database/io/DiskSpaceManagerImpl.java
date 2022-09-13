@@ -73,13 +73,16 @@ import java.util.concurrent.locks.ReentrantLock;
  * - etc.
  */
 public class DiskSpaceManagerImpl implements DiskSpaceManager {
+    /**一个master page 管理的header page数目，2Byte / header page*/
     static final int MAX_HEADER_PAGES = PAGE_SIZE / 2; // 2 bytes per header page
+    /**每个header page管理的data page的数目*/
     static final int DATA_PAGES_PER_HEADER = PAGE_SIZE * 8; // 1 bit per data page
 
     // Name of base directory.
     private String dbDir;
 
     // Info about each partition.
+    /**所有的分区信息*/
     private Map<Integer, PartitionHandle> partInfo;
 
     // Counter to generate new partition numbers.
@@ -144,11 +147,17 @@ public class DiskSpaceManagerImpl implements DiskSpaceManager {
         }
     }
 
+    /**
+     * 分配一个新的分区
+     * */
     @Override
     public int allocPart() {
         return this.allocPartHelper(this.partNumCounter.getAndIncrement());
     }
 
+    /**
+     * 分配一个指定号码的分区
+     * */
     @Override
     public int allocPart(int partNum) {
         this.partNumCounter.updateAndGet((int x) -> Math.max(x, partNum) + 1);
@@ -187,6 +196,9 @@ public class DiskSpaceManagerImpl implements DiskSpaceManager {
         }
     }
 
+    /**
+     * 释放某个分区
+     * */
     @Override
     public void freePart(int partNum) {
         PartitionHandle pi;
@@ -223,6 +235,9 @@ public class DiskSpaceManagerImpl implements DiskSpaceManager {
         }
     }
 
+    /**
+     * 在partNum指示的分区中分配一个页面，返回vpn
+     * */
     @Override
     public long allocPage(int partNum) {
         this.managerLock.lock();
@@ -244,6 +259,9 @@ public class DiskSpaceManagerImpl implements DiskSpaceManager {
         }
     }
 
+    /**
+     * 分配一个页面，指定了vpn
+     * */
     @Override
     public long allocPage(long page) {
         int partNum = DiskSpaceManager.getPartNum(page);
@@ -270,6 +288,9 @@ public class DiskSpaceManagerImpl implements DiskSpaceManager {
         }
     }
 
+    /**
+     * 释放一个页面，指定vpn
+     * */
     @Override
     public void freePage(long page) {
         int partNum = DiskSpaceManager.getPartNum(page);
@@ -291,6 +312,10 @@ public class DiskSpaceManagerImpl implements DiskSpaceManager {
         }
     }
 
+
+    /**
+     * 读取页面（指定vpn）到buf中
+     * */
     @Override
     public void readPage(long page, byte[] buf) {
         if (buf.length != PAGE_SIZE) {
@@ -315,6 +340,10 @@ public class DiskSpaceManagerImpl implements DiskSpaceManager {
         }
     }
 
+
+    /**
+     * 将buf写回到vpn=page的页面
+     * */
     @Override
     public void writePage(long page, byte[] buf) {
         if (buf.length != PAGE_SIZE) {
@@ -339,6 +368,10 @@ public class DiskSpaceManagerImpl implements DiskSpaceManager {
         }
     }
 
+
+    /**
+     * 检查某个页面是否分配
+     * */
     @Override
     public boolean pageAllocated(long page) {
         int partNum = DiskSpaceManager.getPartNum(page);

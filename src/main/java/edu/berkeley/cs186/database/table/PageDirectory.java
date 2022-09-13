@@ -18,6 +18,8 @@ import java.util.NoSuchElementException;
 import java.util.Random;
 
 /**
+ * pageDirectoryId是一个随机生成的32位整数，用于帮助检测错误：如尝试写入不受页面目录管理的页面时。
+ *
  * An implementation of a heap file, using a page directory. Assumes data pages are packed (but record
  * lengths do not need to be fixed-length).
  *
@@ -41,13 +43,16 @@ import java.util.Random;
  */
 public class PageDirectory implements BacktrackingIterable<Page> {
     // size of the header in header pages
+    /**header 页的页头大小（不包括前36B）*/
     private static final short HEADER_HEADER_SIZE = 13;
 
     // number of data page entries in a header page
+    /**一个header page中容纳的data-page-entry数目*/
     private static final short HEADER_ENTRY_COUNT = (BufferManager.EFFECTIVE_PAGE_SIZE -
             HEADER_HEADER_SIZE) / DataPageEntry.SIZE;
 
     // size of the header in data pages
+    /**数据页的页头大小（除去前36B），pageDirectoryId(4B) + indexOfHeaderPage(4B) + slotInHeaderPage(2B)*/
     private static final short DATA_HEADER_SIZE = 10;
 
     // effective page size
@@ -62,6 +67,7 @@ public class PageDirectory implements BacktrackingIterable<Page> {
     private int partNum;
 
     // First header page
+    /**第一个header page*/
     private HeaderPage firstHeader;
 
     // Size of metadata of an empty data page.
@@ -71,6 +77,7 @@ public class PageDirectory implements BacktrackingIterable<Page> {
     private LockContext lockContext;
 
     // page directory id
+    /**page directory id*/
     private int pageDirectoryId;
 
     /**
@@ -104,6 +111,7 @@ public class PageDirectory implements BacktrackingIterable<Page> {
         return new DataPage(pageDirectoryId, this.bufferManager.fetchPage(lockContext, pageNum));
     }
 
+    /**获取一个能满足要求的页-DataPage*/
     public Page getPageWithSpace(short requiredSpace) {
         if (requiredSpace <= 0) {
             throw new IllegalArgumentException("cannot request nonpositive amount of space");
@@ -115,11 +123,14 @@ public class PageDirectory implements BacktrackingIterable<Page> {
         Page page = this.firstHeader.loadPageWithSpace(requiredSpace);
         LockContext pageContext = lockContext.childContext(page.getPageNum());
         // TODO(proj4_part2): Update the following line
-        LockUtil.ensureSufficientLockHeld(pageContext, LockType.NL);
+        LockUtil.ensureSufficientLockHeld(pageContext, LockType.X);
 
         return new DataPage(pageDirectoryId, page);
     }
 
+    /**
+     * DataPage-page的空余空间变为了newFreeSpace，对其进行更新
+     * */
     public void updateFreeSpace(Page page, short newFreeSpace) {
         if (newFreeSpace <= 0 || newFreeSpace > EFFECTIVE_PAGE_SIZE - emptyPageMetadataSize) {
             throw new IllegalArgumentException("bad size for data page free space");
@@ -132,6 +143,7 @@ public class PageDirectory implements BacktrackingIterable<Page> {
             Buffer b = ((DataPage) page).getFullBuffer();
             b.position(4); // skip page directory id
             headerIndex = b.getInt();
+            //slot
             offset = b.getShort();
         } finally {
             page.unpin();
@@ -178,6 +190,9 @@ public class PageDirectory implements BacktrackingIterable<Page> {
             }
         }
 
+        /**
+         * 剔除了DATA_HEADER_SIZE(10 Byte)的buffer
+         * */
         @Override
         public Buffer getBuffer() {
             return super.getBuffer().position(DATA_HEADER_SIZE).slice();
@@ -190,6 +205,7 @@ public class PageDirectory implements BacktrackingIterable<Page> {
     }
 
     /**
+     * header page 中保存的数据项条目
      * Entry for a data page inside a header page.
      */
     private static class DataPageEntry {
@@ -203,6 +219,8 @@ public class PageDirectory implements BacktrackingIterable<Page> {
         private short freeSpace;
 
         // creates an invalid data page entry (one where no data page has been allocated yet).
+
+        /**新建一个无效的data page entry*/
         private DataPageEntry() {
             this(DiskSpaceManager.INVALID_PAGE_NUM, (short) -1);
         }
@@ -238,6 +256,7 @@ public class PageDirectory implements BacktrackingIterable<Page> {
         private HeaderPage nextPage;
         private Page page;
         private short numDataPages;
+        /**到firstHeaderPage的距离*/
         private int headerOffset;
 
         private HeaderPage(long pageNum, int headerOffset, boolean firstHeader) {
@@ -293,7 +312,9 @@ public class PageDirectory implements BacktrackingIterable<Page> {
             }
         }
 
-        // add a new header page
+        /**
+         * 增加一个新的header page
+         */
         private void addNewHeaderPage() {
             if (this.nextPage != null) {
                 this.nextPage.addNewHeaderPage();
@@ -310,14 +331,18 @@ public class PageDirectory implements BacktrackingIterable<Page> {
             }
         }
 
-        // gets and loads a page with the required free space
+        /**
+         * 请求一个页面，满足给定的空间
+         * @param requiredSpace
+         * @return
+         */
         private Page loadPageWithSpace(short requiredSpace) {
             this.page.pin();
             try {
                 Buffer b = this.page.getBuffer();
                 b.position(HEADER_HEADER_SIZE);
 
-                // if we have any data page managed by this header page with enough space, return it
+                // 如果可以由当前header page所管理的有效页面分配（先考虑填充碎片）
                 short unusedSlot = -1;
                 for (short i = 0; i < HEADER_ENTRY_COUNT; ++i) {
                     DataPageEntry dpe = DataPageEntry.fromBytes(b);
@@ -336,11 +361,11 @@ public class PageDirectory implements BacktrackingIterable<Page> {
                     }
                 }
 
-                // if we have any unused slot in this header page, allocate a new data page
+                // 放到第一个遇到的空位上
                 if (unusedSlot != -1) {
                     Page page = bufferManager.fetchNewPage(lockContext, partNum);
                     DataPageEntry dpe = new DataPageEntry(page.getPageNum(),
-                                                          (short) (EFFECTIVE_PAGE_SIZE - emptyPageMetadataSize - requiredSpace));
+                            (short) (EFFECTIVE_PAGE_SIZE - emptyPageMetadataSize - requiredSpace));
 
                     b.position(HEADER_HEADER_SIZE + DataPageEntry.SIZE * unusedSlot);
                     dpe.toBytes(b);
@@ -356,14 +381,19 @@ public class PageDirectory implements BacktrackingIterable<Page> {
                     this.addNewHeaderPage();
                 }
 
-                // no space on this header page, try next one
+                // 尝试由下一个header page进行分配
                 return this.nextPage.loadPageWithSpace(requiredSpace);
             } finally {
                 this.page.unpin();
             }
         }
 
-        // updates free space
+        /**
+         * 更新当前管理的第index个 data page 的剩余空间
+         * @param dataPage
+         * @param index
+         * @param newFreeSpace
+         */
         private void updateSpace(Page dataPage, short index, short newFreeSpace) {
             this.page.pin();
             try {
@@ -376,7 +406,7 @@ public class PageDirectory implements BacktrackingIterable<Page> {
                     b.position(HEADER_HEADER_SIZE + DataPageEntry.SIZE * index);
                     dpe.toBytes(b);
                 } else {
-                    // the entire page is free; free it
+                    // 整个空间都释放了，释放此页面
                     Buffer b = this.page.getBuffer();
                     b.position(HEADER_HEADER_SIZE + DataPageEntry.SIZE * index);
                     (new DataPageEntry()).toBytes(b);
@@ -393,6 +423,10 @@ public class PageDirectory implements BacktrackingIterable<Page> {
         }
 
         // iterator over the data pages managed by this header page
+
+        /**
+         * 扫描此header page 管理的所有data page的迭代器
+         */
         private class HeaderPageIterator extends IndexBacktrackingIterator<Page> {
             private HeaderPageIterator() {
                 super(HEADER_ENTRY_COUNT);
@@ -432,7 +466,7 @@ public class PageDirectory implements BacktrackingIterable<Page> {
     }
 
     /**
-     * Iterator over header pages.
+     * 扫描所有header page的迭代器.
      */
     private class HeaderPageIterator implements BacktrackingIterator<BacktrackingIterable<Page>> {
         private HeaderPage nextPage;

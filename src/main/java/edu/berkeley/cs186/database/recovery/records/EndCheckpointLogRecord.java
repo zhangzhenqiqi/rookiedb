@@ -64,6 +64,7 @@ public class EndCheckpointLogRecord extends LogRecord {
     }
 
     /**
+     * 一页是否可以装下这条记录
      * @return boolean indicating whether information for
      * the log record can fit in one record on a page
      */

@@ -3,6 +3,9 @@ package edu.berkeley.cs186.database.concurrency;
 import edu.berkeley.cs186.database.TransactionContext;
 
 /**
+ * 虚拟锁，不执行任何锁定。一个有用的例子：在临时表只能从创建他们的事务中访问，所以无需考虑并发问题，
+ * 此时就可以传进去一个虚拟锁。
+ * <p></p>
  * A lock context that doesn't do anything at all. Used where a lock context
  * is expected, but no locking should be done.
  *

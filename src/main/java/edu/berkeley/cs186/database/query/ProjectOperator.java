@@ -30,7 +30,7 @@ public class ProjectOperator extends QueryOperator {
      * out columns. Optionally computes an aggregate if it is specified.
      *
      * @param source
-     * @param columns
+     * @param columns  表达式，即SELECT expr0,expr1... FROM ...
      * @param groupByColumns
      */
     public ProjectOperator(QueryOperator source, List<String> columns, List<String> groupByColumns) {
@@ -76,7 +76,8 @@ public class ProjectOperator extends QueryOperator {
             for (String colName: expressions.get(i).getDependencies()) {
                 dependencyIndices.add(this.sourceSchema.findField(colName));
             }
-            if (!expressions.get(i).hasAgg()) {
+            //有group语句的话，投影运算的表达式中涉及到的依赖列必须是group中的列，否则无法投影
+            if (!expressions.get(i).hasAgg()) {//当前expr不是聚合表达式
                 dependencyIndices.removeAll(groupByIndices);
                 if (dependencyIndices.size() != 0) {
                     int any = dependencyIndices.iterator().next();
@@ -121,6 +122,7 @@ public class ProjectOperator extends QueryOperator {
 
     private class ProjectIterator implements Iterator<Record> {
         private Iterator<Record> sourceIterator;
+        /**是否有聚合操作*/
         private boolean hasAgg = false;
 
         private ProjectIterator() {
@@ -139,6 +141,7 @@ public class ProjectOperator extends QueryOperator {
         public Record next() {
             if (!this.hasNext()) throw new NoSuchElementException();
             Record curr = this.sourceIterator.next();
+            //没有聚合操作 和 group语句， 直接计算表达式即可
             if (!this.hasAgg && groupByColumns.size() == 0 ) {
                 List<DataBox> newValues = new ArrayList<>();
                 for (Expression f: expressions) {
@@ -147,6 +150,7 @@ public class ProjectOperator extends QueryOperator {
                 return new Record(newValues);
             }
 
+            //有聚合操作一定有group by子句（有group by子句不一定有聚合操作）；
             // Everything after here is to handle aggregation
             Record base = curr; // We'll draw the GROUP BY values from here
             while (curr != GroupByOperator.MARKER) {

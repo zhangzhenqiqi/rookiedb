@@ -27,7 +27,12 @@ public class BufferManager implements AutoCloseable {
     // (used to store the pageLSN, and to ensure that a redo-only/undo-only log record can
     // fit on one page).
     /**
-     * ，每页保存字节数,保留字节用于记录恢复
+     * 每页保存36字节数,保留字节用于记录恢复。用于存储pageLSN并确保 redo-only/undo-only 日志可以放在一页上。
+     * 所以在每次读写page时，偏移量需要加上这个值才可以得到物理上的真正的偏移量。
+     * 这是对于[D]页面来说的，保留的36Byte具有很多用处：
+     * 1）对数据页面而言，需要保存着LSN。
+     * 2）对日志记录而言，它不需要保存LSN，但需要保存着一些日志记录的元信息，不同的日志类型具有不同的元信息，
+     * 36Byte足以应对所有情况。
      */
     public static final short RESERVED_SPACE = 36;
 
@@ -144,6 +149,7 @@ public class BufferManager implements AutoCloseable {
         }
 
         /**
+         * 验证此帧，并在需要时刷盘
          * Invalidates the frame, flushing it if necessary.
          */
         private void invalidate() {
@@ -197,6 +203,7 @@ public class BufferManager implements AutoCloseable {
                 if (!this.dirty) {
                     return;
                 }
+                //在将脏页刷新到磁盘之前，需要将页内相关的日志先刷盘。《窃取》
                 if (!this.logPage) {
                     recoveryManager.pageFlushHook(this.getPageLSN());
                 }
@@ -252,7 +259,7 @@ public class BufferManager implements AutoCloseable {
                         byte[] before = Arrays.copyOfRange(contents, start + offset, start + offset + len);
                         byte[] after = Arrays.copyOfRange(buf, start, start + len);
                         long pageLSN = recoveryManager.logPageWrite(transaction.getTransNum(), pageNum, (short) (start + position), before,
-                                       after);
+                                after);
                         this.setPageLSN(pageLSN);
                     }
                 }
@@ -311,6 +318,8 @@ public class BufferManager implements AutoCloseable {
         }
 
         /**
+         * 将contents发生改变的区域进行截取并封装为 (offset,len) 的格式返回。但每组最多也不能超过maxRange，
+         * 这是为了保证一页可以存下一条log record，before+after相当于两倍长度，前面保留的36Byte足以容下日志记录的其他字段了，
          * Generates (offset, length) pairs for where buf differs from contents. Merges nearby
          * pairs (where nearby is defined as pairs that have fewer than BufferManager.RESERVED_SPACE
          * bytes of unmodified data between them).
@@ -321,12 +330,13 @@ public class BufferManager implements AutoCloseable {
             int startIndex = -1;
             int skip = -1;
             for (int i = 0; i < num; ++i) {
-                if (startIndex >= 0 && maxRange == i - startIndex) {
+                if (startIndex >= 0 && maxRange == i - startIndex) {//[start,i)
                     ranges.add(new Pair<>(startIndex, maxRange));
                     startIndex = -1;
                     skip = -1;
+                    i--;
                 } else if (buf[i] == contents[offset + i] && startIndex >= 0) {
-                    if (skip > BufferManager.RESERVED_SPACE) {
+                    if (skip > BufferManager.RESERVED_SPACE) {//skip 即当前连续出现相同值(buf & contents)达到了阈值
                         ranges.add(new Pair<>(startIndex, i - startIndex - skip));
                         startIndex = -1;
                         skip = -1;
@@ -507,6 +517,9 @@ public class BufferManager implements AutoCloseable {
     }
 
     /**
+     * 释放页面-将页面从缓存中移出，并告诉DiskSpaceManager不再需要该页面。页面必须在此调用之前固定，
+     * 并且在此调用之后不能使用（除取消固定外）。如果事务存在的话，会将页面写回disk中。
+     * <p></p>
      * Frees a page - evicts the page from cache, and tells the disk space manager
      * that the page is no longer needed. Page must be pinned before this call,
      * and cannot be used after this call (aside from unpinning).
@@ -520,6 +533,7 @@ public class BufferManager implements AutoCloseable {
             int frameIndex = this.pageToFrame.get(page.getPageNum());
 
             Frame frame = this.frames[frameIndex];
+            //write to disk
             if (transaction != null) page.flush();
             this.pageToFrame.remove(page.getPageNum(), frameIndex);
             evictionPolicy.cleanup(frame);
@@ -576,6 +590,10 @@ public class BufferManager implements AutoCloseable {
         }
     }
 
+    /**
+     * 淘汰第i帧，当此帧有效并且未被pin时淘汰。
+     * @param i
+     */
     private void evict(int i) {
         Frame frame = frames[i];
         frame.frameLock.lock();
@@ -586,7 +604,7 @@ public class BufferManager implements AutoCloseable {
 
                 frames[i] = new Frame(frame.contents, this.firstFreeIndex);
                 this.firstFreeIndex = i;
-
+                //evict 之前刷盘
                 frame.invalidate();
             }
         } finally {
@@ -634,6 +652,7 @@ public class BufferManager implements AutoCloseable {
     }
 
     public static boolean logIOs;
+
     private void incrementIOs() {
         if (logIOs) {
             System.out.println("IO incurred");

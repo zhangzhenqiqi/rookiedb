@@ -26,7 +26,7 @@ import java.util.concurrent.TimeUnit;
 public class CommandLineInterface {
     private static final String MASCOT = "\n\\|/  ___------___\n \\__|--%s______%s--|\n    |  %-9s |\n     ---______---\n";
     private static final int[] VERSION = { 1, 8, 6 }; // {major, minor, build}
-    private static final String LABEL = "sp22";
+    private static final String LABEL = "zzq";
 
     private InputStream in;
     private PrintStream out; // Use instead of System.out to work across a network
@@ -35,15 +35,15 @@ public class CommandLineInterface {
 
     public static void main(String args[]) throws IOException {
         // Basic database for project 0 through 3
-        Database db = new Database("demo", 25);
+//        Database db = new Database("demo", 25);
         
-        // Use the following after completing project 4 (locking)
-        // Database db = new Database("demo", 25, new LockManager());
+//         Use the following after completing project 4 (locking)
+//         Database db = new Database("demo", 25, new LockManager());
         
         // Use the following after completing project 5 (recovery)
-        // Database db = new Database("demo", 25, new LockManager(), new ClockEvictionPolicy(), true);
+         Database db = new Database("demo", 25, new LockManager(), new ClockEvictionPolicy(), true);
 
-        db.loadDemo();
+//        db.loadDemo();
 
         CommandLineInterface cli = new CommandLineInterface(db);
         cli.run();
@@ -165,17 +165,18 @@ public class CommandLineInterface {
         new PrettyPrinter(out).printSchema(s);
     }
 
+    //查询元数据的命令- '\locks' '\di'
     private void parseMetaCommand(String input, Database db) {
         input = input.substring(1); // Shave off the initial slash
         String[] tokens = input.split("\\s+");
         String cmd = tokens[0];
         TransactionContext tc = TransactionContext.getTransaction();
-        if (cmd.equals("d")) {
+        if (cmd.equals("d")) {//查询表的元信息
             if (tokens.length == 1) {
                 List<Record> records = db.scanTableMetadataRecords();
                 new PrettyPrinter(out).printRecords(db.getTableInfoSchema().getFieldNames(),
                         records.iterator());
-            } else if (tokens.length == 2) {
+            } else if (tokens.length == 2) {//查询特定表的信息
                 String tableName = tokens[1];
                 if (tc == null) {
                     try (Transaction t = db.beginTransaction()) {
@@ -185,11 +186,11 @@ public class CommandLineInterface {
                     printTable(tableName);
                 }
             }
-        } else if (cmd.equals("di")) {
+        } else if (cmd.equals("di")) {//查询索引的元信息
             List<Record> records = db.scanIndexMetadataRecords();
             new PrettyPrinter(out).printRecords(db.getIndexInfoSchema().getFieldNames(),
                     records.iterator());
-        } else if (cmd.equals("locks")) {
+        } else if (cmd.equals("locks")) {//查询锁
             if (tc == null) {
                 this.out.println("No locks held, because not currently in a transaction.");
             } else {
@@ -204,8 +205,8 @@ public class CommandLineInterface {
     }
 
     private static String[] institution = {
-            "berkeley", "berkley", "berklee", "Brocolli", "BeRKeLEy", "UC Zoom",
-            "   UCB  ", "go bears", "   #1  "
+            /*"berkeley", "berkley", "berklee", "Brocolli", "BeRKeLEy", "UC Zoom",
+            "   UCB  ", "go bears",*/ "   #1  "
     };
 
     private static List<String> startupMessages = Arrays

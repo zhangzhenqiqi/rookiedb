@@ -101,9 +101,11 @@ public class Table implements BacktrackingIterable<Record> {
     private PageDirectory pageDirectory;
 
     // The size (in bytes) of the bitmap found at the beginning of each data page.
+    /** 位于每个数据页开头的bitmap的大小，单位为Byte */
     private int bitmapSizeInBytes;
 
     // The number of records on each data page.
+    /**每个数据页可以容纳的记录数*/
     private int numRecordsPerPage;
 
     // The lock context of the table.
@@ -113,6 +115,7 @@ public class Table implements BacktrackingIterable<Record> {
     Map<String, TableStats> stats;
 
     // Constructors ////////////////////////////////////////////////////////////
+
     /**
      * Load a table named `name` with schema `schema` from `pageDirectory`. `lockContext`
      * is the lock context of the table (use a DummyLockContext() to disable locking). A
@@ -128,7 +131,7 @@ public class Table implements BacktrackingIterable<Record> {
         this.numRecordsPerPage = computeNumRecordsPerPage(pageDirectory.getEffectivePageSize(), schema);
         // mark everything that is not used for records as metadata
         this.pageDirectory.setEmptyPageMetadataSize((short) (pageDirectory.getEffectivePageSize() - numRecordsPerPage
-                                               * schema.getSizeInBytes()));
+                * schema.getSizeInBytes()));
         this.stats = stats;
         if (!this.stats.containsKey(name)) this.stats.put(name, new TableStats(this.schema, this.numRecordsPerPage));
     }
@@ -136,6 +139,7 @@ public class Table implements BacktrackingIterable<Record> {
     public Table(String name, Schema schema, PageDirectory pageDirectory, LockContext lockContext) {
         this(name, schema, pageDirectory, lockContext, new HashMap<>());
     }
+
     // Accessors ///////////////////////////////////////////////////////////////
     public String getName() {
         return name;
@@ -153,7 +157,7 @@ public class Table implements BacktrackingIterable<Record> {
         numRecordsPerPage = 1;
         bitmapSizeInBytes = 0;
         pageDirectory.setEmptyPageMetadataSize((short) (pageDirectory.getEffectivePageSize() -
-                                          schema.getSizeInBytes()));
+                schema.getSizeInBytes()));
     }
 
     public TableStats getStats() {
@@ -174,7 +178,7 @@ public class Table implements BacktrackingIterable<Record> {
             page.getBuffer().get(bytes, 0, bitmapSizeInBytes);
             return bytes;
         } else {
-            return new byte[] {(byte) 0xFF};
+            return new byte[]{(byte) 0xFF};
         }
     }
 
@@ -185,6 +189,7 @@ public class Table implements BacktrackingIterable<Record> {
         }
     }
 
+    /**计算bitmap大小（Byte）*/
     private static int computeBitmapSizeInBytes(int pageSize, Schema schema) {
         int recordsPerPage = computeNumRecordsPerPage(pageSize, schema);
         if (recordsPerPage == 1) return 0;
@@ -218,11 +223,12 @@ public class Table implements BacktrackingIterable<Record> {
         }
         // +1 for space in bitmap
         int recordOverheadInBits = 1 + 8 * schema.getSizeInBytes();
-        int pageSizeInBits = pageSize  * 8;
+        int pageSizeInBits = pageSize * 8;
         return pageSizeInBits / recordOverheadInBits;
     }
 
     // Modifiers ///////////////////////////////////////////////////////////////
+
     /**
      * buildStatistics builds histograms on each of the columns of a table. Running
      * it multiple times refreshes the statistics
@@ -231,12 +237,14 @@ public class Table implements BacktrackingIterable<Record> {
         this.stats.get(name).refreshHistograms(buckets, this);
     }
 
+    /**插入表中一条记录*/
     private synchronized void insertRecord(Page page, int entryNum, Record record) {
         int offset = bitmapSizeInBytes + (entryNum * schema.getSizeInBytes());
         page.getBuffer().position(offset).put(record.toBytes(schema));
     }
 
     /**
+     * 插入一条记录,并返回对应的rid
      * addRecord adds a record to this table and returns the record id of the
      * newly added record. stats, freePageNums, and numRecords are updated
      * accordingly. The record is added to the first free slot of the first free
@@ -310,7 +318,7 @@ public class Table implements BacktrackingIterable<Record> {
         // its on.
         LockContext pageContext = tableContext.childContext(rid.getPageNum());
         // TODO(proj4_part2): Update the following line
-        LockUtil.ensureSufficientLockHeld(pageContext, LockType.NL);
+        LockUtil.ensureSufficientLockHeld(pageContext, LockType.X);
 
         Record newRecord = schema.verify(updated);
         Record oldRecord = getRecord(rid);
@@ -337,7 +345,7 @@ public class Table implements BacktrackingIterable<Record> {
         LockContext pageContext = tableContext.childContext(rid.getPageNum());
 
         // TODO(proj4_part2): Update the following line
-        LockUtil.ensureSufficientLockHeld(pageContext, LockType.NL);
+        LockUtil.ensureSufficientLockHeld(pageContext, LockType.X);
 
         Page page = fetchPage(rid.getPageNum());
         try {
@@ -350,7 +358,7 @@ public class Table implements BacktrackingIterable<Record> {
             stats.get(name).removeRecord(record);
             int numRecords = numRecordsPerPage == 1 ? 0 : numRecordsOnPage(page);
             pageDirectory.updateFreeSpace(page,
-                                     (short) ((numRecordsPerPage - numRecords) * schema.getSizeInBytes()));
+                    (short) ((numRecordsPerPage - numRecords) * schema.getSizeInBytes()));
             return record;
         } finally {
             page.unpin();
@@ -392,8 +400,8 @@ public class Table implements BacktrackingIterable<Record> {
 
         if (e >= numRecordsPerPage) {
             String msg = String.format(
-                             "There are only %d records per page, but record %d was requested.",
-                             numRecordsPerPage, e);
+                    "There are only %d records per page, but record %d was requested.",
+                    numRecordsPerPage, e);
             throw new DatabaseException(msg);
         }
     }
@@ -401,12 +409,13 @@ public class Table implements BacktrackingIterable<Record> {
     // Iterators ///////////////////////////////////////////////////////////////
 
     /**
+     * 返回对table的全表扫描的迭代器
      * @return Performs a full scan on the table to return id's of all existing
      * records
      */
     public BacktrackingIterator<RecordId> ridIterator() {
         // TODO(proj4_part2): Update the following line
-        LockUtil.ensureSufficientLockHeld(tableContext, LockType.NL);
+        LockUtil.ensureSufficientLockHeld(tableContext, LockType.S);
 
         BacktrackingIterator<Page> iter = pageDirectory.iterator();
         return new ConcatBacktrackingIterator<>(new PageIterator(iter, false));
@@ -420,7 +429,7 @@ public class Table implements BacktrackingIterable<Record> {
      */
     public BacktrackingIterator<Record> recordIterator(Iterator<RecordId> rids) {
         // TODO(proj4_part2): Update the following line
-        LockUtil.ensureSufficientLockHeld(tableContext, LockType.NL);
+        LockUtil.ensureSufficientLockHeld(tableContext, LockType.S);
         return new RecordIterator(rids);
     }
 
@@ -435,6 +444,7 @@ public class Table implements BacktrackingIterable<Record> {
     }
 
     /**
+     * page上的rid迭代器
      * RIDPageIterator is a BacktrackingIterator over the RecordIds of a single
      * page of the table.
      *
@@ -468,6 +478,9 @@ public class Table implements BacktrackingIterable<Record> {
         }
     }
 
+    /**
+     * 扫描page中所有record的迭代器
+     */
     private class PageIterator implements BacktrackingIterator<BacktrackingIterable<RecordId>> {
         private BacktrackingIterator<Page> sourceIterator;
         private boolean pinOnFetch;
@@ -502,6 +515,9 @@ public class Table implements BacktrackingIterable<Record> {
             return new InnerIterable(sourceIterator.next());
         }
 
+        /**
+         * 数据页上的record的代表的 rid迭代器
+         */
         private class InnerIterable implements BacktrackingIterable<RecordId> {
             private Page baseObject;
 

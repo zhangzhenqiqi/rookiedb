@@ -7,12 +7,17 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 
+/**
+ * 表示为Xact table中的一个条目
+ */
 class TransactionTableEntry {
     // Transaction object for the transaction.
     Transaction transaction;
     // lastLSN of transaction, or 0 if no log entries for the transaction exist.
+    /**此事务的上一条LSN，0表示不存在*/
     long lastLSN = 0;
     // map of transaction's savepoints
+    // savepoints 信息，savepointName -> lastLSN
     private Map<String, Long> savepoints = new HashMap<>();
 
     TransactionTableEntry(Transaction transaction) {

@@ -12,6 +12,7 @@ import java.util.function.Function;
 import java.util.function.UnaryOperator;
 
 /**
+ * 暴露出来的事务接口
  * The public-facing interface of a transaction.
  */
 public abstract class Transaction implements AutoCloseable {

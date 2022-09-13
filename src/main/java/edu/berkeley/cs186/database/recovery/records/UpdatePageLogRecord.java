@@ -14,6 +14,9 @@ import java.util.Arrays;
 import java.util.Objects;
 import java.util.Optional;
 
+/**
+ * 更新操作对应的记录
+ */
 public class UpdatePageLogRecord extends LogRecord {
     private long transNum; // transaction that updated the page
     private long pageNum; // page that was updated

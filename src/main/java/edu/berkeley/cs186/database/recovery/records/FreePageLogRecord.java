@@ -14,6 +14,13 @@ import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Optional;
 
+/**
+ *
+ * #redo() -> BufferManager#freePage()[page.flush()] -> DiskSpaceManager#freePage() ->
+ * PartitionHandler#freePage()[RecoveryManager#logPageWrite()#logFreePage()]
+ * 从这条调用链条发现，当在调用logFreePage()方法写入FreePageLogRecord记录时，这个释放的页面其实
+ * 已经刷新到disk中了，是刷盘之后才调用的此方法。
+ */
 public class FreePageLogRecord extends LogRecord {
     private long transNum;
     private long pageNum;

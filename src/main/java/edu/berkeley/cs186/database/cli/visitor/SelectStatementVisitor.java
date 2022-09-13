@@ -55,6 +55,7 @@ class SelectStatementVisitor extends StatementVisitor {
         for (Pair<String, String> tempTableName: currentAliases) {
             query.addTempTableAlias(tempTableName.getFirst(), tempTableName.getSecond());
         }
+
         for(int i = 1; i < tableNames.size(); i++) {
             query.join(
                 tableNames.get(i),
@@ -63,6 +64,7 @@ class SelectStatementVisitor extends StatementVisitor {
                 joinedTableRightCols.get(i-1)
             );
         }
+
         for(int i = 0; i < predicateColumns.size(); i++) {
             query.select(
                 predicateColumns.get(i),

@@ -12,6 +12,7 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
+ * 分配新的页面时产生的记录。
  * A log entry that records the allocation of a page
  */
 public class AllocPageLogRecord extends LogRecord {

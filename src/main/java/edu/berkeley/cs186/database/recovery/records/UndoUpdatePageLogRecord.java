@@ -18,6 +18,7 @@ public class UndoUpdatePageLogRecord extends LogRecord {
     private long transNum;
     private long pageNum;
     private long prevLSN;
+    /**CLR记录特有的，指示下一条要undo的记录的LSN*/
     private long undoNextLSN;
     public short offset;
     public byte[] after;
@@ -58,6 +59,12 @@ public class UndoUpdatePageLogRecord extends LogRecord {
         return true;
     }
 
+    /**
+     * 从页面的offset处开始，将after写入。
+     * @param rm the database's recovery manager.
+     * @param dsm the database's disk space manager
+     * @param bm the database's buffer manager
+     */
     @Override
     public void redo(RecoveryManager rm, DiskSpaceManager dsm, BufferManager bm) {
         super.redo(rm, dsm, bm);

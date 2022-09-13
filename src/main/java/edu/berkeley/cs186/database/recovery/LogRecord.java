@@ -12,6 +12,8 @@ import java.util.*;
 import java.util.function.Consumer;
 
 /**
+ * LogRecord序列化时，第一个字节指示LogRecord的类型，知道类型之后，就可以选取对应的序列化方法读取这条log record。
+ * <p></p>
  * An record of the log.
  */
 public abstract class LogRecord {
@@ -121,6 +123,8 @@ public abstract class LogRecord {
     }
 
     /**
+     * 返回log记录中记录的事务是否可撤销。
+     * <p></p>
      * @return boolean indicating whether transaction recorded in the
      * log record is undoable
      */
@@ -137,6 +141,8 @@ public abstract class LogRecord {
     }
 
     /**
+     * 返回撤销该日志记录的CLR，但不执行撤销。
+     * <p></p>
      * Returns a CLR undoing this log record, but does not execute the undo.
      * @param lastLSN lastLSN for the transaction. This will be used as the
      *                prevLSN of the returned CLR.
@@ -147,6 +153,8 @@ public abstract class LogRecord {
     }
 
     /**
+     * 执行此日志记录所描述的更改。
+     * <p></p>
      * Performs the change described by this log record
      * @param rm the database's recovery manager.
      * @param dsm the database's disk space manager
