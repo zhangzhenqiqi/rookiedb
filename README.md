@@ -1,5 +1,5 @@
 # RookieDB
-
+FFGG
 ![The official unofficial mascot of the class projects](images/derpydb-small.jpg)
 
 This repo contains a bare-bones database implementation, which supports
